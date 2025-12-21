@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Alert, useWindowDimensions, Animated, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Alert, useWindowDimensions, Animated, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, Camera, MapPin, Users, Check, ChevronRight, ChevronLeft, Mail, Mic, FileText, Sparkles, ArrowRight, HardHat, Hammer, Wrench, Zap, Ruler, Briefcase, Search, Paintbrush, Home, Truck, Trees, Droplets, Wind, Flame, Shield, Construction, Building2, Warehouse, PaintBucket, Shovel, CircleDot, Scissors, Snowflake, Sun, Leaf, Grid3X3, Box, Columns, Fence } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -555,11 +555,20 @@ export default function OnboardingScreen({ onClose }: OnboardingScreenProps) {
     const isValid = firstName.trim() && lastName.trim() && phoneNumber.trim();
     
     return (
-      <View style={styles.contentContainer}>
+      <KeyboardAvoidingView 
+        style={styles.contentContainer} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
         <View style={styles.screenHeader}>
           {renderBackButton()}
         </View>
-        <View style={{ flex: 1, paddingTop: 20 }}>
+        <ScrollView 
+          style={{ flex: 1 }} 
+          contentContainerStyle={{ paddingTop: 20, flexGrow: 1 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <Text style={[styles.welcomeTitle, { textAlign: 'left', marginBottom: 12 }]}>
             First, let's get your info
           </Text>
@@ -608,7 +617,7 @@ export default function OnboardingScreen({ onClose }: OnboardingScreenProps) {
               />
             </View>
           </View>
-        </View>
+        </ScrollView>
         <View style={styles.bottomButtonContainer}>
           <TouchableOpacity 
             style={[styles.primaryButton, !isValid && styles.primaryButtonDisabled]} 
@@ -618,7 +627,7 @@ export default function OnboardingScreen({ onClose }: OnboardingScreenProps) {
             <Text style={styles.primaryButtonText}>Continue</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     );
   };
 
@@ -690,7 +699,11 @@ export default function OnboardingScreen({ onClose }: OnboardingScreenProps) {
     );
 
     return (
-      <View style={[styles.container, { paddingHorizontal: 20 }]}>
+      <KeyboardAvoidingView 
+        style={[styles.container, { paddingHorizontal: 20 }]}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
         <View style={styles.screenHeader}>
           {renderBackButton()}
         </View>
@@ -774,7 +787,7 @@ export default function OnboardingScreen({ onClose }: OnboardingScreenProps) {
             </TouchableOpacity>
           </View>
         )}
-      </View>
+      </KeyboardAvoidingView>
     );
   };
 
@@ -939,7 +952,11 @@ export default function OnboardingScreen({ onClose }: OnboardingScreenProps) {
       : "What's the name of your company?";
 
     return (
-      <View style={styles.contentContainer}>
+      <KeyboardAvoidingView 
+        style={styles.contentContainer}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
         <View style={styles.screenHeader}>
           {renderBackButton()}
         </View>
@@ -971,7 +988,7 @@ export default function OnboardingScreen({ onClose }: OnboardingScreenProps) {
             <Text style={styles.primaryButtonText}>Continue</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     );
   };
 
@@ -1052,7 +1069,11 @@ export default function OnboardingScreen({ onClose }: OnboardingScreenProps) {
     };
 
     return (
-      <View style={[styles.container, { paddingHorizontal: 20 }]}>
+      <KeyboardAvoidingView 
+        style={[styles.container, { paddingHorizontal: 20 }]}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
         <View style={styles.screenHeader}>
           {renderBackButton()}
         </View>
@@ -1097,7 +1118,7 @@ export default function OnboardingScreen({ onClose }: OnboardingScreenProps) {
             </View>
           </View>
         </ScrollView>
-      </View>
+      </KeyboardAvoidingView>
     );
   };
 
@@ -1534,26 +1555,35 @@ export default function OnboardingScreen({ onClose }: OnboardingScreenProps) {
   );
 
   const renderAccountCreation = () => (
-    <View style={styles.contentContainer}>
+    <KeyboardAvoidingView 
+      style={styles.contentContainer}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
       <View style={styles.screenHeader}>
         {renderBackButton()}
       </View>
-      <View style={{ flex: 1, justifyContent: 'center' }}>
+      <ScrollView 
+        style={{ flex: 1 }} 
+        contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.welcomeTitle}>Let's save your work.</Text>
         <Text style={styles.welcomeSubtitle}>Create an account so your photos and jobs are backed up automatically.</Text>
         
         <View style={{ marginTop: 32, gap: 16 }}>
-          <TextInput style={styles.input} placeholder="Work Email" placeholderTextColor="#94A3B8" />
+          <TextInput style={styles.input} placeholder="Work Email" placeholderTextColor="#94A3B8" keyboardType="email-address" autoCapitalize="none" />
           <TextInput style={styles.input} placeholder="Password" secureTextEntry placeholderTextColor="#94A3B8" />
           <TextInput style={styles.input} placeholder="Company Name" placeholderTextColor="#94A3B8" />
         </View>
-      </View>
+      </ScrollView>
       <View style={styles.bottomButtonContainer}>
         <TouchableOpacity style={styles.primaryButton} onPress={() => setContextualStep(18)}>
           <Text style={styles.primaryButtonText}>Create Account</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 
   const renderFirstRealJobChoice = () => (

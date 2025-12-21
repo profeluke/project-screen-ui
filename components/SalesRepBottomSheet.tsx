@@ -14,7 +14,7 @@ interface SalesRepBottomSheetProps {
 const rep = {
   name: 'McKynzie',
   fullName: 'McKynzie Wyatt',
-  title: 'Wise CompanyCam Guide',
+  title: '',
   email: 'mckynzie@companycam.com',
   phone: '+1 (402) 555-0123',
   calendlyUrl: 'https://calendly.com/mckynzie-companycam',
@@ -132,11 +132,10 @@ export default function SalesRepBottomSheet({ visible, onClose }: SalesRepBottom
             <View style={styles.onlineIndicator} />
           </View>
           <Text style={styles.name}>{rep.fullName}</Text>
-          <Text style={styles.title}>{rep.title}</Text>
           
           {/* Free Trial Badge */}
           <View style={styles.trialBadge}>
-            <Text style={styles.trialBadgeText}>Your Rep</Text>
+            <Text style={styles.trialBadgeText}>Your CompanyCam Rep</Text>
           </View>
         </View>
 
