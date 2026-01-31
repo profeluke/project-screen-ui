@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Linking, Alert } from 'react-native';
-import { X, Calendar, UserPlus } from 'lucide-react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Linking, Alert, ActivityIndicator } from 'react-native';
+import { X, Calendar, UserPlus, Clock, Users } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BottomSheet, { BottomSheetView, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import * as Contacts from 'expo-contacts';
@@ -8,24 +8,37 @@ import * as Contacts from 'expo-contacts';
 interface SalesRepBottomSheetProps {
   visible: boolean;
   onClose: () => void;
+  hasAssignedRep?: boolean; // Whether a rep has been assigned yet
+  onRepStateChange?: (hasRep: boolean) => void; // Callback for prototype state toggling
 }
 
-// Rep data - McKynzie
+// Rep data - Anna
 const rep = {
-  name: 'McKynzie',
-  fullName: 'McKynzie Wyatt',
+  name: 'Anna',
+  fullName: 'Anna Wyatt',
   title: '',
-  email: 'mckynzie@companycam.com',
+  email: 'anna@companycam.com',
   phone: '+1 (402) 555-0123',
-  calendlyUrl: 'https://calendly.com/mckynzie-companycam',
-  bio: "Hey there! 👋 I'm McKynzie, and I'm here to help you get set up and answer any questions you have. I can also show you tips on how the best companies are using CompanyCam to find great customers, do amazing work, and grow their business. Let's chat!",
+  calendlyUrl: 'https://calendly.com/anna-companycam',
+  bio: "Hey there! 👋 I'm Anna, and I'm here to help you get set up and answer any questions you have. I can also show you tips on how the best companies are using CompanyCam to find great customers, do amazing work, and grow their business. Let's chat!",
 };
 
-export default function SalesRepBottomSheet({ visible, onClose }: SalesRepBottomSheetProps) {
+// Generic demo booking URL for when no rep is assigned yet
+const genericCalendlyUrl = 'https://calendly.com/companycam-sales';
+
+export default function SalesRepBottomSheet({ visible, onClose, hasAssignedRep = true, onRepStateChange }: SalesRepBottomSheetProps) {
   const insets = useSafeAreaInsets();
   const bottomSheetRef = React.useRef<BottomSheet>(null);
-  const snapPoints = React.useMemo(() => ['85%'], []);
   const [contactSaved, setContactSaved] = React.useState(false);
+  
+  const snapPoints = React.useMemo(() => [hasAssignedRep ? '85%' : '70%'], [hasAssignedRep]);
+  
+  // Helper to toggle state and notify parent
+  const handleToggleRepState = (newState: boolean) => {
+    if (onRepStateChange) {
+      onRepStateChange(newState);
+    }
+  };
 
   React.useEffect(() => {
     if (visible) {
@@ -42,7 +55,7 @@ export default function SalesRepBottomSheet({ visible, onClose }: SalesRepBottom
       if (status !== 'granted') {
         Alert.alert(
           'Permission Required',
-          'Please allow access to contacts to save McKynzie\'s info.',
+          'Please allow access to contacts to save Anna\'s info.',
           [{ text: 'OK' }]
         );
         return;
@@ -51,7 +64,7 @@ export default function SalesRepBottomSheet({ visible, onClose }: SalesRepBottom
       const contact: Contacts.Contact = {
         contactType: Contacts.ContactTypes.Person,
         name: rep.fullName,
-        firstName: 'McKynzie',
+        firstName: 'Anna',
         lastName: 'Wyatt',
         jobTitle: rep.title,
         company: 'CompanyCam',
@@ -73,7 +86,7 @@ export default function SalesRepBottomSheet({ visible, onClose }: SalesRepBottom
       setContactSaved(true);
       Alert.alert(
         'Contact Saved! 🎉',
-        'McKynzie\'s contact info has been added to your phone.',
+        'Anna\'s contact info has been added to your phone.',
         [{ text: 'Great!' }]
       );
     } catch (error) {
@@ -87,7 +100,7 @@ export default function SalesRepBottomSheet({ visible, onClose }: SalesRepBottom
   };
 
   const handleBookTime = () => {
-    Linking.openURL(rep.calendlyUrl);
+    Linking.openURL(hasAssignedRep ? rep.calendlyUrl : genericCalendlyUrl);
   };
 
   const renderBackdrop = React.useCallback(
@@ -122,48 +135,97 @@ export default function SalesRepBottomSheet({ visible, onClose }: SalesRepBottom
           <X size={20} color="#64748B" />
         </TouchableOpacity>
 
-        {/* Profile Section */}
-        <View style={styles.profileSection}>
-          <View style={styles.avatarContainer}>
-            <Image 
-              source={require('../assets/images/McKynzie.png')} 
-              style={styles.avatar}
-            />
-            <View style={styles.onlineIndicator} />
-          </View>
-          <Text style={styles.name}>{rep.fullName}</Text>
-          
-          {/* Free Trial Badge */}
-          <View style={styles.trialBadge}>
-            <Text style={styles.trialBadgeText}>Your CompanyCam Rep</Text>
-          </View>
-        </View>
+        {hasAssignedRep ? (
+          <>
+            {/* Profile Section - Assigned Rep */}
+            <View style={styles.profileSection}>
+              <View style={styles.avatarContainer}>
+                <Image 
+                  source={require('../assets/images/McKynzie.png')} 
+                  style={styles.avatar}
+                />
+                <View style={styles.onlineIndicator} />
+              </View>
+              <Text style={styles.name}>{rep.fullName}</Text>
+              
+              {/* Badge - Tappable for prototype to toggle back to unassigned */}
+              <TouchableOpacity 
+                style={styles.trialBadge}
+                onPress={() => handleToggleRepState(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.trialBadgeText}>Your CompanyCam Rep</Text>
+              </TouchableOpacity>
+            </View>
 
-        {/* Bio Section */}
-        <View style={styles.bioSection}>
-          <Text style={styles.bioText}>{rep.bio}</Text>
-        </View>
+            {/* Bio Section */}
+            <View style={styles.bioSection}>
+              <Text style={styles.bioText}>{rep.bio}</Text>
+            </View>
 
-        {/* Action Buttons */}
-        <View style={styles.actionsSection}>
-          {/* Primary CTA - Save Contact */}
-          <TouchableOpacity 
-            style={[styles.primaryButton, contactSaved && styles.primaryButtonSaved]} 
-            onPress={handleSaveContact}
-            disabled={contactSaved}
-          >
-            <UserPlus size={20} color="#FFFFFF" />
-            <Text style={styles.primaryButtonText}>
-              {contactSaved ? 'Contact Saved ✓' : 'Save Contact'}
-            </Text>
-          </TouchableOpacity>
+            {/* Action Buttons */}
+            <View style={styles.actionsSection}>
+              {/* Primary CTA - Save Contact */}
+              <TouchableOpacity 
+                style={[styles.primaryButton, contactSaved && styles.primaryButtonSaved]} 
+                onPress={handleSaveContact}
+                disabled={contactSaved}
+              >
+                <UserPlus size={20} color="#FFFFFF" />
+                <Text style={styles.primaryButtonText}>
+                  {contactSaved ? 'Contact Saved ✓' : 'Save Contact'}
+                </Text>
+              </TouchableOpacity>
 
-          {/* Book Time - Secondary prominent */}
-          <TouchableOpacity style={styles.bookTimeButton} onPress={handleBookTime}>
-            <Calendar size={20} color="#7C3AED" />
-            <Text style={styles.bookTimeButtonText}>Book a Time</Text>
-          </TouchableOpacity>
-        </View>
+              {/* Book Time - Secondary prominent */}
+              <TouchableOpacity style={styles.bookTimeButton} onPress={handleBookTime}>
+                <Calendar size={20} color="#7C3AED" />
+                <Text style={styles.bookTimeButtonText}>Book a Time</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : (
+          <>
+            {/* Profile Section - Unassigned Rep */}
+            <View style={styles.profileSection}>
+              <View style={styles.avatarContainer}>
+                <View style={styles.pendingAvatar}>
+                  <Users size={40} color="#94A3B8" />
+                </View>
+                <View style={styles.pendingIndicator}>
+                  <ActivityIndicator size="small" color="#7C3AED" />
+                </View>
+              </View>
+              <Text style={styles.name}>Finding Your Rep...</Text>
+              
+              {/* Pending Badge - Tappable for prototype */}
+              <TouchableOpacity 
+                style={styles.pendingBadge}
+                onPress={() => handleToggleRepState(true)}
+                activeOpacity={0.7}
+              >
+                <Clock size={14} color="#64748B" />
+                <Text style={styles.pendingBadgeText}>Usually takes a few minutes</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Info Section */}
+            <View style={styles.bioSection}>
+              <Text style={styles.bioText}>
+                We're assigning a dedicated CompanyCam rep to help you get the most out of your account. In the meantime, feel free to book a demo and we'll make sure the right person is there to help!
+              </Text>
+            </View>
+
+            {/* Action Buttons */}
+            <View style={styles.actionsSection}>
+              {/* Primary CTA - Book Training */}
+              <TouchableOpacity style={styles.primaryButton} onPress={handleBookTime}>
+                <Calendar size={20} color="#FFFFFF" />
+                <Text style={styles.primaryButtonText}>Book 20 Min Training</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
       </BottomSheetView>
     </BottomSheet>
   );
@@ -212,6 +274,17 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: '#7C3AED',
   },
+  pendingAvatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 3,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   onlineIndicator: {
     position: 'absolute',
     bottom: 4,
@@ -222,6 +295,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#22C55E',
     borderWidth: 3,
     borderColor: '#FFFFFF',
+  },
+  pendingIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#F3E8FF',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   name: {
     fontFamily: 'Inter-Bold',
@@ -245,6 +331,20 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: 14,
     color: '#7C3AED',
+  },
+  pendingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  pendingBadgeText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 14,
+    color: '#64748B',
   },
   bioSection: {
     backgroundColor: '#F8FAFC',

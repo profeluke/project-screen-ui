@@ -84,6 +84,7 @@ export default function HomeScreen() {
   const [hideProjectSection, setHideProjectSection] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showSalesRepSheet, setShowSalesRepSheet] = useState(false);
+  const [hasAssignedRep, setHasAssignedRep] = useState(false); // Toggle to test assigned vs unassigned rep states
 
 
   const [hasNewMyStuffItems, setHasNewMyStuffItems] = useState(true); // Badge indicator for My Stuff
@@ -106,7 +107,7 @@ export default function HomeScreen() {
   // Quick Access Cards State
   const [quickAccessCards, setQuickAccessCards] = useState<QuickAccessCard[]>([
     { id: 'my-stuff', label: 'My Stuff', icon: 'FolderOpen', color: '#F59E0B', backgroundColor: '#FEF3C7', visible: true, order: 0 },
-    { id: 'sales-rep', label: 'McKynzie', icon: 'SalesRepPhoto', color: '#7C3AED', backgroundColor: '#F3E8FF', visible: true, order: 1 },
+    { id: 'sales-rep', label: 'Anna', icon: 'SalesRepPhoto', color: '#7C3AED', backgroundColor: '#F3E8FF', visible: true, order: 1 },
     { id: 'leaderboard', label: 'Lincoln, NE', icon: 'StateOutline:NE', color: '#FFFFFF', backgroundColor: '#DC2626', visible: true, order: 2 },
     { id: 'project-map', label: 'Map', icon: 'Map', color: '#64748B', backgroundColor: '#F1F5F9', visible: true, order: 3 },
     { id: 'portfolio', label: 'Portfolio', icon: 'ImageIcon', color: '#8B5CF6', backgroundColor: '#F3E8FF', visible: true, order: 4 },
@@ -267,20 +268,39 @@ export default function HomeScreen() {
 
   // Helper function to get icon component
   const getQuickAccessIcon = (iconName: string) => {
-    // Handle sales rep photo - returns a circular image
+    // Handle sales rep photo - returns a circular image or pending state
     if (iconName === 'SalesRepPhoto') {
-      return () => (
-        <Image 
-          source={require('../assets/images/McKynzie.png')}
-          style={{ 
+      if (hasAssignedRep) {
+        return () => (
+          <Image 
+            source={require('../assets/images/McKynzie.png')}
+            style={{ 
+              width: 32, 
+              height: 32, 
+              borderRadius: 16,
+              borderWidth: 2,
+              borderColor: '#7C3AED',
+            }}
+          />
+        );
+      } else {
+        // Unassigned rep state - show a placeholder icon
+        return () => (
+          <View style={{ 
             width: 32, 
             height: 32, 
             borderRadius: 16,
             borderWidth: 2,
-            borderColor: '#7C3AED',
-          }}
-        />
-      );
+            borderColor: '#E2E8F0',
+            borderStyle: 'dashed',
+            backgroundColor: '#F8FAFC',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}>
+            <Users size={16} color="#94A3B8" />
+          </View>
+        );
+      }
     }
     
     // Handle state outlines (e.g., "StateOutline:NE")
@@ -605,7 +625,14 @@ export default function HomeScreen() {
       >
         {/* Top Row: Profile Button, Map Button, and Notifications Button */}
         <View style={styles.topRow}>
-          <TouchableOpacity style={styles.profileMenuContainer} onPress={handleAccountPress}>
+          <TouchableOpacity 
+            style={styles.profileMenuContainer} 
+            onPress={handleAccountPress}
+            onLongPress={() => {
+              // Toggle rep assignment state for prototype testing
+              setHasAssignedRep(!hasAssignedRep);
+            }}
+          >
             <View style={styles.headerAvatar}>
               <Image 
                 source={{ uri: 'https://randomuser.me/api/portraits/women/68.jpg' }}
@@ -700,15 +727,22 @@ export default function HomeScreen() {
                           <IconComponent size={16} color={card.color} />
                         </View>
                       )}
-                      <Text style={styles.quickAccessText} numberOfLines={1}>{card.label}</Text>
+                      <Text style={styles.quickAccessText} numberOfLines={1}>
+                        {card.id === 'sales-rep' && !hasAssignedRep ? 'Get Training' : card.label}
+                      </Text>
                       {card.id === 'getting-started' && (
                         <View style={styles.quickAccessBadgeCentered}>
                           <Text style={styles.quickAccessBadgeText}>3</Text>
                         </View>
                       )}
-                      {card.id === 'sales-rep' && (
-                        <View style={styles.salesRepBadge}>
-                          <Text style={styles.salesRepBadgeText}>Rep</Text>
+                      {card.id === 'sales-rep' && hasAssignedRep && (
+                        <View style={styles.salesRepBadgeOverhang}>
+                          <Text style={styles.salesRepBadgeText}>Your Rep</Text>
+                        </View>
+                      )}
+                      {card.id === 'sales-rep' && !hasAssignedRep && (
+                        <View style={styles.pendingRepBadgeOverhang}>
+                          <Text style={styles.pendingRepBadgeText}>New</Text>
                         </View>
                       )}
                     </TouchableOpacity>
@@ -1512,6 +1546,8 @@ export default function HomeScreen() {
       <SalesRepBottomSheet
         visible={showSalesRepSheet}
         onClose={() => setShowSalesRepSheet(false)}
+        hasAssignedRep={hasAssignedRep}
+        onRepStateChange={setHasAssignedRep}
       />
 
       {/* User Profile Modal */}
@@ -1687,7 +1723,41 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     marginLeft: 'auto',
   },
+  salesRepBadgeOverhang: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: '#7C3AED',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    zIndex: 10,
+  },
   salesRepBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontFamily: 'Inter-SemiBold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  pendingRepBadge: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginLeft: 'auto',
+  },
+  pendingRepBadgeOverhang: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    zIndex: 10,
+  },
+  pendingRepBadgeText: {
     color: '#FFFFFF',
     fontSize: 10,
     fontFamily: 'Inter-SemiBold',

@@ -57,10 +57,6 @@
         "projectId": "78dcbe7e-a618-4f42-ab5a-e1d0d72e6060"
       }
     },
-    "owner": "profeluke",
-    "updates": {
-      "url": "https://u.expo.dev/78dcbe7e-a618-4f42-ab5a-e1d0d72e6060"
-    },
-    "runtimeVersion": "1.0.0"
+    "owner": "profeluke"
   }
 }

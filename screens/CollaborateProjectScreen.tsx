@@ -19,7 +19,12 @@ import {
   Calendar,
   FolderOpen,
   Check,
-  Sparkles
+  Sparkles,
+  Users,
+  CheckSquare,
+  MessageSquare,
+  Share2,
+  ArrowRight
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -42,6 +47,7 @@ interface Project {
 interface CollaborateProjectScreenProps {
   contractor: ContractorData;
   onClose: () => void;
+  onCollaborationStarted?: () => void;
 }
 
 // Fake projects data
@@ -96,11 +102,12 @@ const PROJECTS: Project[] = [
   },
 ];
 
-export default function CollaborateProjectScreen({ contractor, onClose }: CollaborateProjectScreenProps) {
+export default function CollaborateProjectScreen({ contractor, onClose, onCollaborationStarted }: CollaborateProjectScreenProps) {
   const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [showProjectSelection, setShowProjectSelection] = useState(false);
 
   const filteredProjects = PROJECTS.filter(project => 
     project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -110,6 +117,10 @@ export default function CollaborateProjectScreen({ contractor, onClose }: Collab
   const handleSelectProject = (project: Project) => {
     setSelectedProject(project);
     setShowSuccess(true);
+    // Auto-favorite the contractor when collaborating
+    if (onCollaborationStarted) {
+      onCollaborationStarted();
+    }
   };
 
   const handleSuccessClose = () => {
@@ -121,28 +132,130 @@ export default function CollaborateProjectScreen({ contractor, onClose }: Collab
     }, 150);
   };
 
+  // Collaboration features for the explainer
+  const collaborationFeatures = [
+    {
+      icon: Camera,
+      title: 'Share Photos',
+      description: 'Both of you can take and upload photos to the same project',
+    },
+    {
+      icon: CheckSquare,
+      title: 'Share Checklists',
+      description: 'Assign and complete tasks together to keep work on track',
+    },
+    {
+      icon: MessageSquare,
+      title: 'Stay in Sync',
+      description: 'Comment on photos and get notified of updates in real-time',
+    },
+    {
+      icon: Users,
+      title: 'Team Visibility',
+      description: 'Everyone stays up to speed on project progress',
+    },
+  ];
+
+  // Intro/Explainer View
+  if (!showProjectSelection) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={onClose}>
+            <ChevronLeft size={24} color="#1E293B" />
+          </TouchableOpacity>
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>Collaborate</Text>
+            <Text style={styles.headerSubtitle}>with {contractor.name}</Text>
+          </View>
+          <View style={styles.backButton} />
+        </View>
+
+        <ScrollView 
+          style={styles.explainerScroll}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.explainerContent}
+        >
+          {/* Hero Section */}
+          <View style={styles.explainerHero}>
+            <LinearGradient
+              colors={['#DC2626', '#B91C1C']}
+              style={styles.explainerIconContainer}
+            >
+              <Share2 size={40} color="#FFFFFF" />
+            </LinearGradient>
+            <Text style={styles.explainerTitle}>Project Collaboration</Text>
+            <Text style={styles.explainerSubtitle}>
+              Share a project in CompanyCam where you and {contractor.name} can work together seamlessly.
+            </Text>
+          </View>
+
+          {/* Features List */}
+          <View style={styles.featuresSection}>
+            <Text style={styles.featuresSectionTitle}>What you can do together</Text>
+            {collaborationFeatures.map((feature, index) => {
+              const IconComponent = feature.icon;
+              return (
+                <View key={index} style={styles.featureCard}>
+                  <View style={styles.featureIconContainer}>
+                    <IconComponent size={22} color="#DC2626" />
+                  </View>
+                  <View style={styles.featureContent}>
+                    <Text style={styles.featureTitle}>{feature.title}</Text>
+                    <Text style={styles.featureDescription}>{feature.description}</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+
+          {/* Info Note */}
+          <View style={styles.infoNote}>
+            <Sparkles size={18} color="#F59E0B" />
+            <Text style={styles.infoNoteText}>
+              Your collaborator will receive an invitation to join the project. They'll have access to add photos and complete assigned tasks.
+            </Text>
+          </View>
+
+          <View style={{ height: 120 }} />
+        </ScrollView>
+
+        {/* Bottom CTA */}
+        <View style={[styles.bottomCTA, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+          <TouchableOpacity 
+            style={styles.chooseProjectButton}
+            onPress={() => setShowProjectSelection(true)}
+            activeOpacity={0.9}
+          >
+            <LinearGradient
+              colors={['#DC2626', '#B91C1C']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.chooseProjectGradient}
+            >
+              <Text style={styles.chooseProjectText}>Choose which project to share</Text>
+              <ArrowRight size={20} color="#FFFFFF" />
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // Project Selection View
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onClose}>
+        <TouchableOpacity style={styles.backButton} onPress={() => setShowProjectSelection(false)}>
           <ChevronLeft size={24} color="#1E293B" />
         </TouchableOpacity>
         <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Collaborate</Text>
-          <Text style={styles.headerSubtitle}>with {contractor.name}</Text>
+          <Text style={styles.headerTitle}>Select a Project</Text>
+          <Text style={styles.headerSubtitle}>to share with {contractor.name}</Text>
         </View>
         <View style={styles.backButton} />
-      </View>
-
-      {/* Info Banner */}
-      <View style={styles.infoBanner}>
-        <View style={styles.infoBannerIcon}>
-          <Sparkles size={20} color="#DC2626" />
-        </View>
-        <Text style={styles.infoBannerText}>
-          Select a project to invite {contractor.name.split(' ')[0]} to collaborate. They'll be able to add photos and notes.
-        </Text>
       </View>
 
       {/* Search Bar */}
@@ -300,6 +413,145 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 2,
   },
+  // Explainer View Styles
+  explainerScroll: {
+    flex: 1,
+  },
+  explainerContent: {
+    paddingHorizontal: 20,
+    paddingTop: 32,
+  },
+  explainerHero: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  explainerIconContainer: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    shadowColor: '#DC2626',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  explainerTitle: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 26,
+    color: '#1E293B',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  explainerSubtitle: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 16,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 24,
+    paddingHorizontal: 10,
+  },
+  featuresSection: {
+    marginBottom: 24,
+  },
+  featuresSectionTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 16,
+  },
+  featureCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderRadius: 14,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  featureIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#FEF2F2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  featureContent: {
+    flex: 1,
+  },
+  featureTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+    color: '#1E293B',
+    marginBottom: 4,
+  },
+  featureDescription: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 14,
+    color: '#64748B',
+    lineHeight: 20,
+  },
+  infoNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFFBEB',
+    padding: 14,
+    borderRadius: 12,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#FEF3C7',
+  },
+  infoNoteText: {
+    flex: 1,
+    fontFamily: 'Inter-Regular',
+    fontSize: 13,
+    color: '#92400E',
+    lineHeight: 19,
+  },
+  bottomCTA: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  chooseProjectButton: {
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  chooseProjectGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    gap: 10,
+  },
+  chooseProjectText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 17,
+    color: '#FFFFFF',
+  },
+  // Original styles below
   infoBanner: {
     flexDirection: 'row',
     alignItems: 'center',

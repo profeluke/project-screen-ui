@@ -188,6 +188,33 @@ const AudioRecordingModal = forwardRef((props: AudioRecordingModalProps, ref: Re
   const [activeTab, setActiveTab] = useState<'timeline' | 'photos' | 'notes'>('timeline');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedCreateType, setSelectedCreateType] = useState<string>('');
+  
+  // Multi-select output types for empty state preview (AI Notes is always selected)
+  const [selectedOutputTypes, setSelectedOutputTypes] = useState<Set<string>>(new Set(['AI Notes']));
+  
+  // Output type options for the horizontal list
+  const OUTPUT_TYPE_OPTIONS = [
+    { id: 'Proposal', label: 'Proposal', icon: FileText },
+    { id: 'Work Order', label: 'Work Order', icon: CheckSquare },
+    { id: 'Punch List', label: 'Punch List', icon: CheckSquare },
+    { id: 'Daily Report', label: 'Daily Report', icon: FileText },
+    { id: 'Checklist', label: 'Checklist', icon: CheckSquare },
+  ];
+  
+  const toggleOutputType = (typeId: string) => {
+    // AI Notes cannot be toggled off
+    if (typeId === 'AI Notes') return;
+    
+    setSelectedOutputTypes(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(typeId)) {
+        newSet.delete(typeId);
+      } else {
+        newSet.add(typeId);
+      }
+      return newSet;
+    });
+  };
 
   // Micro-hints state
   const [currentHintIndex, setCurrentHintIndex] = useState(0);
@@ -1567,14 +1594,23 @@ JSON (in order):\n${sessionJson}`;
                       </View>
                     </View>
                   ) : (
-                    <TouchableOpacity
-                      style={styles.photoTextTouchable}
-                      onPress={() => startEditing(entry.id, entry.content)}
-                    >
-                      <Text style={styles.photoTextContent}>
-                        {entry.content}
-                      </Text>
-                    </TouchableOpacity>
+                    <>
+                      <TouchableOpacity
+                        style={styles.photoTextTouchable}
+                        onPress={() => startEditing(entry.id, entry.content)}
+                      >
+                        <Text style={styles.photoTextContent} numberOfLines={3}>
+                          {entry.content}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        onPress={() => handleSpeakForPhoto(entry.uri!)}
+                        style={styles.photoTextMicButton}
+                        activeOpacity={0.8}
+                      >
+                        <Mic size={18} color="#64748B" />
+                      </TouchableOpacity>
+                    </>
                   )}
                 </View>
               </View>
@@ -1725,10 +1761,12 @@ JSON (in order):\n${sessionJson}`;
             { pointerEvents: currentSnapIndex === 0 ? 'auto' : 'none' }
           ]}>
             <View style={styles.emptyStateTitleContainer}>
-              <CamAIIcon size={28} glyphColor="#000000" />
-              <Text style={styles.emptyStateTitle}>Capture & Talk</Text>
+              <CamAIIcon size={24} glyphColor="#000000" />
+              <Text style={styles.emptyStateTitle}>Take pictures and talk</Text>
             </View>
-            <Text style={styles.emptyText}>Swipe up to get AI organized notes, docs, proposals, punchlists, and more.</Text>
+            <Text style={styles.emptyStateDescription}>
+              Photos save to CompanyCam with AI notes. Can also generate proposals, work orders, punch lists, and more.
+            </Text>
           </Animated.View>
 
           {/* Skeleton UI - fades in as modal opens to 85% */}
@@ -2214,89 +2252,54 @@ JSON (in order):\n${sessionJson}`;
           >
             <View style={styles.topSectionContainer}>
               <View style={styles.aiAssistContent}>
-                {!selectedCreateType ? (
-                  <>
-                    <View style={styles.aiAssistTitleContainer}>
-                      <Text style={styles.aiAssistTitle}>Create with Cam AI</Text>
-                      <CamAIIcon size={20} glyphColor="#000000" />
-                    </View>
+                <View style={styles.aiAssistTitleContainer}>
+                  <Text style={styles.aiAssistTitle}>Create with Cam AI</Text>
+                  <CamAIIcon size={20} glyphColor="#000000" />
+                </View>
 
-                    <View style={styles.aiAssistOptions}>
-                      <TouchableOpacity 
-                        style={styles.aiAssistPill} 
-                        onPress={() => handlePillPress('AI Notes Doc')}
-                      >
-                        <Sparkles size={14} color="#64748B" />
-                        <Text style={styles.aiAssistPillText}>AI Notes Doc</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        style={styles.aiAssistPill} 
-                        onPress={() => handlePillPress('Proposal')}
-                      >
-                        <FileText size={14} color="#64748B" />
-                        <Text style={styles.aiAssistPillText}>Proposal</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        style={styles.aiAssistPill} 
-                        onPress={() => handlePillPress('Work Order')}
-                      >
-                        <CheckSquare size={14} color="#64748B" />
-                        <Text style={styles.aiAssistPillText}>Work Order</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        style={styles.aiAssistPill} 
-                        onPress={() => handlePillPress('Daily Report')}
-                      >
-                        <FileText size={14} color="#64748B" />
-                        <Text style={styles.aiAssistPillText}>Daily Report</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        style={styles.aiAssistPill} 
-                        onPress={() => handlePillPress('Checklist')}
-                      >
-                        <CheckSquare size={14} color="#64748B" />
-                        <Text style={styles.aiAssistPillText}>Checklist</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        style={styles.aiAssistPill} 
-                        onPress={() => handlePillPress('Punch List')}
-                      >
-                        <CheckSquare size={14} color="#64748B" />
-                        <Text style={styles.aiAssistPillText}>Punch List</Text>
-                      </TouchableOpacity>
+                {/* Single horizontal row with AI Notes first, then other options */}
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.aiAssistScrollView}
+                  contentContainerStyle={styles.aiAssistOptionsRow}
+                >
+                  {/* AI Notes - always selected, first in row */}
+                  <View style={styles.aiAssistAINotesWrapper}>
+                    <View style={styles.aiAssistAINotesSelected}>
+                      <Sparkles size={14} color="#FFFFFF" />
+                      <Text style={styles.aiAssistAINotesText}>AI Notes</Text>
+                      <CheckCircle2 size={14} color="#FFFFFF" />
                     </View>
-                  </>
-                ) : !showCreateModal && (
-                  <View style={styles.selectedTypeContainer}>
-                    <View style={styles.selectedTypeHeader}>
-                      <View style={styles.selectedTypeInfo}>
-                        {selectedCreateType === 'AI Notes Doc' && <Sparkles size={18} color="#3B82F6" />}
-                        {selectedCreateType === 'Proposal' && <FileText size={18} color="#3B82F6" />}
-                        {selectedCreateType === 'Work Order' && <CheckSquare size={18} color="#3B82F6" />}
-                        {selectedCreateType === 'Daily Report' && <FileText size={18} color="#3B82F6" />}
-                        {selectedCreateType === 'Checklist' && <CheckSquare size={18} color="#3B82F6" />}
-                        {selectedCreateType === 'Punch List' && <CheckSquare size={18} color="#3B82F6" />}
-                        <View style={styles.selectedTypeTextContainer}>
-                          <Text style={styles.selectedTypeText}>{selectedCreateType}</Text>
-                          <Text style={styles.selectedTypeSubtext}>Capture photos, then generate</Text>
-                        </View>
-                      </View>
-                      <TouchableOpacity 
-                        style={styles.clearSelectionIconButton}
-                        onPress={handleClearSelection}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      >
-                        <X size={20} color="#64748B" />
-                      </TouchableOpacity>
-                    </View>
-                    <TouchableOpacity 
-                      style={styles.focusedGenerateButton}
-                      onPress={handleConfirmCreate}
-                    >
-                      <Text style={styles.focusedGenerateButtonText}>Generate {selectedCreateType}</Text>
-                    </TouchableOpacity>
+                    <Text style={styles.aiAssistAlwaysOnText}>Always on</Text>
                   </View>
-                )}
+
+                  {/* Other options in the same row */}
+                  {OUTPUT_TYPE_OPTIONS.map((option) => {
+                    const isSelected = selectedOutputTypes.has(option.id);
+                    const IconComponent = option.icon;
+                    return (
+                      <TouchableOpacity
+                        key={option.id}
+                        style={[
+                          styles.aiAssistPill,
+                          isSelected && styles.aiAssistPillSelected
+                        ]}
+                        onPress={() => toggleOutputType(option.id)}
+                        activeOpacity={0.7}
+                      >
+                        <IconComponent size={14} color={isSelected ? '#FFFFFF' : '#64748B'} />
+                        <Text style={[
+                          styles.aiAssistPillText,
+                          isSelected && styles.aiAssistPillTextSelected
+                        ]}>
+                          {option.label}
+                        </Text>
+                        {isSelected && <CheckCircle2 size={12} color="#FFFFFF" />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
               </View>
 
               <Text style={styles.capturesHeader}>Photos & Notes</Text>
@@ -2464,7 +2467,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 0,
+    paddingTop: 8,
     paddingBottom: 8,
     marginLeft: 24,
   },
@@ -2908,15 +2911,15 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingTop: 12,
+    paddingTop: 8,
     paddingBottom: 40,
-    paddingHorizontal: 32,
   },
   emptyStateTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 12,
+    paddingHorizontal: 32,
+    gap: 8,
+    marginBottom: 4,
   },
   emptyStateLogo: {
     width: 28,
@@ -2928,12 +2931,79 @@ const styles = StyleSheet.create({
     color: '#1E293B',
     textAlign: 'center',
   },
+  emptyStateDescription: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 14,
+    color: '#64748B',
+    textAlign: 'center',
+    marginBottom: 10,
+    paddingHorizontal: 32,
+    lineHeight: 20,
+  },
   emptyText: {
     fontFamily: 'Inter-Regular',
     fontSize: 16,
     color: '#64748B',
     textAlign: 'center',
     lineHeight: 24,
+  },
+  emptyStateScrollView: {
+    width: screenWidth,
+    marginLeft: -16,
+  },
+  emptyStateOutputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    paddingLeft: 20,
+    paddingRight: 20,
+  },
+  emptyStateAINotesWrapper: {
+    alignItems: 'center',
+  },
+  emptyStateAINotesSelected: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    backgroundColor: '#3B82F6',
+    borderRadius: 999,
+  },
+  emptyStateAINotesText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 13,
+    color: '#FFFFFF',
+  },
+  emptyStateAlwaysOnText: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 10,
+    color: '#94A3B8',
+    marginTop: 3,
+  },
+  emptyStateOptionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignSelf: 'flex-start',
+  },
+  emptyStateOptionPillSelected: {
+    backgroundColor: '#64748B',
+    borderColor: '#64748B',
+  },
+  emptyStateOptionText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 13,
+    color: '#64748B',
+  },
+  emptyStateOptionTextSelected: {
+    color: '#FFFFFF',
   },
   skeletonContainer: {
     paddingTop: 16,
@@ -3229,28 +3299,28 @@ const styles = StyleSheet.create({
   photoTextContainer: {
     width: '100%',
     marginBottom: 16,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 16,
-    padding: 12,
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+    padding: 0,
   },
   photoTextCard: {
     backgroundColor: 'transparent',
     borderRadius: 0,
     padding: 0,
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'stretch',
   },
   photoTextLeft: {
-    marginRight: 12,
+    marginRight: 10,
   },
   photoTextRight: {
     flex: 1,
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
   },
   photoTextThumbnail: {
-    width: 72,
-    height: 72,
-    borderRadius: 8,
+    width: 78,
+    height: 78,
+    borderRadius: 10,
     backgroundColor: '#E2E8F0',
   },
   photoTextContentContainer: {
@@ -3258,11 +3328,14 @@ const styles = StyleSheet.create({
     marginRight: 0,
     marginTop: 0,
     marginBottom: 0,
-    backgroundColor: 'transparent',
+    backgroundColor: '#F8FAFC',
     borderRadius: 12,
-    padding: 12,
-    minHeight: 72,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 78,
     justifyContent: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
   },
   photoTextHeader: {
     flexDirection: 'row',
@@ -3290,16 +3363,16 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     alignItems: 'stretch',
     justifyContent: 'center',
-    backgroundColor: 'transparent',
+    backgroundColor: '#F8FAFC',
     borderRadius: 12,
     borderWidth: 0,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    minHeight: 72,
+    paddingHorizontal: 14,
+    paddingVertical: 0,
+    height: 78,
   },
   photoPlaceholderRight: {
     flex: 1,
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
   },
   photoPlaceholderText: {
     fontFamily: 'Inter-Regular',
@@ -3408,6 +3481,12 @@ const styles = StyleSheet.create({
 
   // Touchable and edit styles
   photoTextTouchable: {
+    flex: 1,
+  },
+  photoTextMicButton: {
+    padding: 6,
+    marginLeft: 8,
+    alignSelf: 'flex-start',
   },
   fullWidthTextTouchable: {
     flex: 1,
@@ -3857,11 +3936,54 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    alignSelf: 'flex-start',
+  },
+  aiAssistPillSelected: {
+    backgroundColor: '#64748B',
+    borderColor: '#64748B',
   },
   aiAssistPillText: {
     fontFamily: 'Inter-Medium',
     fontSize: 12,
     color: '#475569',
+  },
+  aiAssistPillTextSelected: {
+    color: '#FFFFFF',
+  },
+  aiAssistScrollView: {
+    width: screenWidth,
+    marginLeft: -28,
+  },
+  aiAssistOptionsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginTop: 12,
+    paddingLeft: 16,
+    paddingRight: 16,
+  },
+  aiAssistAINotesWrapper: {
+    alignItems: 'center',
+  },
+  aiAssistAINotesSelected: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    backgroundColor: '#3B82F6',
+    borderRadius: 999,
+  },
+  aiAssistAINotesText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
+    color: '#FFFFFF',
+  },
+  aiAssistAlwaysOnText: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 10,
+    color: '#94A3B8',
+    marginTop: 3,
   },
   selectedTypeContainer: {
     backgroundColor: '#F8FAFC',

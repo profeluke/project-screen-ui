@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Dimensions, Animated, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, ChevronDown, MapPin, Briefcase, X, Star, Camera, Shield, Clock, Search, Users, FolderOpen, LayoutGrid, List } from 'lucide-react-native';
+import { ChevronLeft, ChevronDown, MapPin, Briefcase, X, Star, Camera, Shield, Clock, Search, Users, FolderOpen, LayoutGrid, List, Heart } from 'lucide-react-native';
 import { TextInput } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import BottomSheet, { 
@@ -33,6 +33,7 @@ interface ProData {
   trade: string;
   verified: boolean;
   projectCount: number;
+  hasTrustyProfile: boolean; // Whether they have a completed Trusty profile
 }
 
 // Local area configuration
@@ -43,7 +44,10 @@ const LOCAL_AREA = {
 };
 
 // Fake data for local pros with project images
+// Contractors with hasTrustyProfile: true have complete Trusty profiles with ratings, reviews, etc.
+// Contractors with hasTrustyProfile: false only have basic CompanyCam data (name, trade, photos)
 const PROS_DATA: ProData[] = [
+  // === TRUSTEE CONTRACTORS (Complete Profiles) ===
   {
     id: '1',
     name: 'Cornhusker Roofing',
@@ -55,6 +59,7 @@ const PROS_DATA: ProData[] = [
     trade: 'Roofing',
     verified: true,
     projectCount: 342,
+    hasTrustyProfile: true,
   },
   {
     id: '2',
@@ -67,6 +72,7 @@ const PROS_DATA: ProData[] = [
     trade: 'Landscaping',
     verified: true,
     projectCount: 256,
+    hasTrustyProfile: true,
   },
   {
     id: '3',
@@ -79,6 +85,7 @@ const PROS_DATA: ProData[] = [
     trade: 'HVAC',
     verified: true,
     projectCount: 891,
+    hasTrustyProfile: true,
   },
   {
     id: '4',
@@ -91,6 +98,7 @@ const PROS_DATA: ProData[] = [
     trade: 'Electrical',
     verified: true,
     projectCount: 445,
+    hasTrustyProfile: true,
   },
   {
     id: '5',
@@ -103,6 +111,7 @@ const PROS_DATA: ProData[] = [
     trade: 'Plumbing',
     verified: true,
     projectCount: 623,
+    hasTrustyProfile: true,
   },
   {
     id: '6',
@@ -115,6 +124,7 @@ const PROS_DATA: ProData[] = [
     trade: 'General Contractor',
     verified: true,
     projectCount: 1247,
+    hasTrustyProfile: true,
   },
   {
     id: '7',
@@ -127,6 +137,7 @@ const PROS_DATA: ProData[] = [
     trade: 'General Contractor',
     verified: false,
     projectCount: 189,
+    hasTrustyProfile: true,
   },
   {
     id: '8',
@@ -139,6 +150,7 @@ const PROS_DATA: ProData[] = [
     trade: 'Siding',
     verified: true,
     projectCount: 234,
+    hasTrustyProfile: true,
   },
   {
     id: '9',
@@ -151,6 +163,7 @@ const PROS_DATA: ProData[] = [
     trade: 'Decking',
     verified: true,
     projectCount: 378,
+    hasTrustyProfile: true,
   },
   {
     id: '10',
@@ -163,29 +176,141 @@ const PROS_DATA: ProData[] = [
     trade: 'Concrete',
     verified: true,
     projectCount: 567,
+    hasTrustyProfile: true,
+  },
+  // === NON-TRUSTEE CONTRACTORS (No Trusty Profile - Minimal Data) ===
+  // These contractors use CompanyCam but haven't set up their Trusty profile
+  // They only have: name, rough trade, photo count from last year, location
+  // No: profile image, ratings, reviews, years in business, verification
+  {
+    id: '11',
+    name: 'J & M Construction',
+    image: null, // No profile image
+    rating: 0,
+    reviewCount: 0,
+    yearsInBusiness: 0,
+    location: 'Lincoln, NE',
+    trade: 'General Contractor',
+    verified: false,
+    projectCount: 89,
+    hasTrustyProfile: false,
+  },
+  {
+    id: '12',
+    name: 'Dave\'s Roofing',
+    image: null,
+    rating: 0,
+    reviewCount: 0,
+    yearsInBusiness: 0,
+    location: 'Lincoln, NE',
+    trade: 'Roofing',
+    verified: false,
+    projectCount: 156,
+    hasTrustyProfile: false,
+  },
+  {
+    id: '13',
+    name: 'ABC Plumbing Services',
+    image: null,
+    rating: 0,
+    reviewCount: 0,
+    yearsInBusiness: 0,
+    location: 'Waverly, NE',
+    trade: 'Plumbing',
+    verified: false,
+    projectCount: 43,
+    hasTrustyProfile: false,
+  },
+  {
+    id: '14',
+    name: 'Mike\'s Electric',
+    image: null,
+    rating: 0,
+    reviewCount: 0,
+    yearsInBusiness: 0,
+    location: 'Lincoln, NE',
+    trade: 'Electrical',
+    verified: false,
+    projectCount: 234,
+    hasTrustyProfile: false,
+  },
+  {
+    id: '15',
+    name: 'Smith Brothers HVAC',
+    image: null,
+    rating: 0,
+    reviewCount: 0,
+    yearsInBusiness: 0,
+    location: 'Hickman, NE',
+    trade: 'HVAC',
+    verified: false,
+    projectCount: 67,
+    hasTrustyProfile: false,
   },
 ];
 
 // Get unique trades from the data
-const ALL_TRADES = ['All Trades', ...Array.from(new Set(PROS_DATA.map(c => c.trade))).sort()];
+// "Trusty Contractors" shows only contractors with completed Trusty profiles
+// "Favorites" shows contractors you've hearted or collaborated with
+// "All" shows all contractors including those without Trusty profiles
+const TRADE_FILTERS = [
+  'Trusty Contractors', // Default - only shows contractors with hasTrustyProfile: true
+  'Favorites', // Shows contractors you've favorited or collaborated with
+  'All', // Shows all contractors
+  ...Array.from(new Set(PROS_DATA.map(c => c.trade))).sort()
+];
 
 type ViewMode = 'grid' | 'list';
 
 export default function LeaderboardScreen({ onClose }: LeaderboardScreenProps) {
   const insets = useSafeAreaInsets();
-  const [selectedTrade, setSelectedTrade] = useState<string>('All Trades');
+  const [selectedTrade, setSelectedTrade] = useState<string>('Trusty Contractors');
   const [showTradePicker, setShowTradePicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedContractor, setSelectedContractor] = useState<ProData | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  // Track favorited contractor IDs (contractors you've hearted or collaborated with)
+  const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set(['1', '6'])); // Pre-populate with a couple favorites for demo
   const tradeBottomSheetRef = useRef<BottomSheet>(null);
   const scrollY = useRef(new Animated.Value(0)).current;
+
+  // Toggle favorite status for a contractor
+  const toggleFavorite = useCallback((contractorId: string) => {
+    setFavoritedIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(contractorId)) {
+        newSet.delete(contractorId);
+      } else {
+        newSet.add(contractorId);
+      }
+      return newSet;
+    });
+  }, []);
+
+  // Add contractor to favorites (used when collaborating)
+  const addToFavorites = useCallback((contractorId: string) => {
+    setFavoritedIds(prev => {
+      const newSet = new Set(prev);
+      newSet.add(contractorId);
+      return newSet;
+    });
+  }, []);
 
   const getFilteredPros = () => {
     let filtered = PROS_DATA;
     
-    // Filter by trade
-    if (selectedTrade !== 'All Trades') {
+    // Filter by selected option
+    if (selectedTrade === 'Trusty Contractors') {
+      // Only show contractors with completed Trusty profiles
+      filtered = filtered.filter(pro => pro.hasTrustyProfile);
+    } else if (selectedTrade === 'Favorites') {
+      // Show only favorited contractors
+      filtered = filtered.filter(pro => favoritedIds.has(pro.id));
+    } else if (selectedTrade === 'All') {
+      // Show all contractors (no filtering by Trusty status)
+      // Keep all
+    } else {
+      // Filter by specific trade (also only show Trusty contractors within that trade by default)
       filtered = filtered.filter(pro => pro.trade === selectedTrade);
     }
     
@@ -296,14 +421,14 @@ export default function LeaderboardScreen({ onClose }: LeaderboardScreenProps) {
           </TouchableOpacity>
           
           <TouchableOpacity 
-            style={[styles.stickyTradeFilter, selectedTrade !== 'All Trades' && styles.stickyTradeFilterActive]}
+            style={[styles.stickyTradeFilter, selectedTrade !== 'Trusty Contractors' && styles.stickyTradeFilterActive]}
             onPress={openTradePicker}
           >
-            <Briefcase size={14} color={selectedTrade !== 'All Trades' ? '#DC2626' : '#64748B'} />
-            <Text style={[styles.stickyTradeFilterText, selectedTrade !== 'All Trades' && styles.stickyTradeFilterTextActive]}>
+            <Briefcase size={14} color={selectedTrade !== 'Trusty Contractors' ? '#DC2626' : '#64748B'} />
+            <Text style={[styles.stickyTradeFilterText, selectedTrade !== 'Trusty Contractors' && styles.stickyTradeFilterTextActive]}>
               {selectedTrade}
             </Text>
-            <ChevronDown size={14} color={selectedTrade !== 'All Trades' ? '#DC2626' : '#64748B'} />
+            <ChevronDown size={14} color={selectedTrade !== 'Trusty Contractors' ? '#DC2626' : '#64748B'} />
           </TouchableOpacity>
           
           <Text style={styles.stickyResultCount}>
@@ -394,14 +519,14 @@ export default function LeaderboardScreen({ onClose }: LeaderboardScreenProps) {
         {/* Inline Filter Bar (scrolls with content) */}
         <View style={styles.inlineFilterBar}>
           <TouchableOpacity 
-            style={[styles.tradeFilter, selectedTrade !== 'All Trades' && styles.tradeFilterActive]}
+            style={[styles.tradeFilter, selectedTrade !== 'Trusty Contractors' && styles.tradeFilterActive]}
             onPress={openTradePicker}
           >
-            <Briefcase size={16} color={selectedTrade !== 'All Trades' ? '#DC2626' : '#64748B'} />
-            <Text style={[styles.tradeFilterText, selectedTrade !== 'All Trades' && styles.tradeFilterTextActive]}>
+            <Briefcase size={16} color={selectedTrade !== 'Trusty Contractors' ? '#DC2626' : '#64748B'} />
+            <Text style={[styles.tradeFilterText, selectedTrade !== 'Trusty Contractors' && styles.tradeFilterTextActive]}>
               {selectedTrade}
             </Text>
-            <ChevronDown size={16} color={selectedTrade !== 'All Trades' ? '#DC2626' : '#64748B'} />
+            <ChevronDown size={16} color={selectedTrade !== 'Trusty Contractors' ? '#DC2626' : '#64748B'} />
           </TouchableOpacity>
           
           <View style={styles.filterBarRight}>
@@ -428,96 +553,166 @@ export default function LeaderboardScreen({ onClose }: LeaderboardScreenProps) {
         {/* Pros Grid View */}
         {viewMode === 'grid' && (
           <View style={styles.prosGrid}>
-            {filteredPros.map((pro) => (
-              <TouchableOpacity 
-                key={pro.id} 
-                style={styles.proCard}
-                activeOpacity={0.9}
-                onPress={() => setSelectedContractor(pro)}
-              >
-                <Image source={pro.image} style={styles.proImage} />
-                <LinearGradient
-                  colors={['transparent', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.85)']}
-                  locations={[0, 0.4, 1]}
-                  style={styles.proOverlay}
+            {filteredPros.map((pro) => {
+              // Get initials for placeholder
+              const initials = pro.name.split(' ').map(word => word[0]).join('').substring(0, 2).toUpperCase();
+              
+              return (
+                <TouchableOpacity 
+                  key={pro.id} 
+                  style={[styles.proCard, !pro.hasTrustyProfile && styles.proCardNoTrusty]}
+                  activeOpacity={0.9}
+                  onPress={() => setSelectedContractor(pro)}
                 >
-                  {/* Verified Badge */}
-                  {pro.verified && (
-                    <View style={styles.verifiedBadge}>
-                      <Shield size={10} color="#FFFFFF" />
+                  {/* Show image if has Trusty profile and image, otherwise show placeholder */}
+                  {pro.image && pro.hasTrustyProfile ? (
+                    <Image source={pro.image} style={styles.proImage} />
+                  ) : (
+                    <View style={styles.proImagePlaceholder}>
+                      <Text style={styles.proInitials}>{initials}</Text>
                     </View>
                   )}
-                  
-                  {/* Rating Badge */}
-                  <View style={styles.ratingBadge}>
-                    <Star size={12} color="#FCD34D" fill="#FCD34D" />
-                    <Text style={styles.ratingText}>{pro.rating}</Text>
-                  </View>
-                  
-                  {/* Pro Info */}
-                  <View style={styles.proInfo}>
-                    <Text style={styles.proName} numberOfLines={2}>{pro.name}</Text>
-                    <Text style={styles.proTrade}>{pro.trade}</Text>
-                    <View style={styles.proMeta}>
-                      <View style={styles.proMetaItem}>
-                        <Camera size={11} color="rgba(255,255,255,0.7)" />
-                        <Text style={styles.proMetaText}>{pro.projectCount}</Text>
+                  <LinearGradient
+                    colors={pro.hasTrustyProfile 
+                      ? ['transparent', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.85)']
+                      : ['transparent', 'rgba(100,116,139,0.3)', 'rgba(100,116,139,0.85)']
+                    }
+                    locations={[0, 0.4, 1]}
+                    style={styles.proOverlay}
+                  >
+                    {/* Favorited Heart Badge */}
+                    {favoritedIds.has(pro.id) && (
+                      <View style={styles.favoritedBadge}>
+                        <Heart size={12} color="#FFFFFF" fill="#FFFFFF" />
                       </View>
-                      <View style={styles.proMetaDot} />
-                      <View style={styles.proMetaItem}>
-                        <Clock size={11} color="rgba(255,255,255,0.7)" />
-                        <Text style={styles.proMetaText}>{pro.yearsInBusiness}yr</Text>
+                    )}
+                    
+                    {/* Verified Badge - only for Trusty contractors */}
+                    {pro.verified && pro.hasTrustyProfile && (
+                      <View style={[styles.verifiedBadge, favoritedIds.has(pro.id) && styles.verifiedBadgeOffset]}>
+                        <Shield size={10} color="#FFFFFF" />
+                      </View>
+                    )}
+                    
+                    {/* Rating Badge - only show for Trusty contractors with ratings */}
+                    {pro.hasTrustyProfile && pro.rating > 0 && (
+                      <View style={styles.ratingBadge}>
+                        <Star size={12} color="#FCD34D" fill="#FCD34D" />
+                        <Text style={styles.ratingText}>{pro.rating}</Text>
+                      </View>
+                    )}
+                    
+                    {/* No Trusty Badge */}
+                    {!pro.hasTrustyProfile && (
+                      <View style={styles.noTrustyBadge}>
+                        <Text style={styles.noTrustyBadgeText}>CompanyCam User</Text>
+                      </View>
+                    )}
+                    
+                    {/* Pro Info */}
+                    <View style={styles.proInfo}>
+                      <Text style={styles.proName} numberOfLines={2}>{pro.name}</Text>
+                      <Text style={styles.proTrade}>{pro.trade}</Text>
+                      <View style={styles.proMeta}>
+                        <View style={styles.proMetaItem}>
+                          <Camera size={11} color="rgba(255,255,255,0.7)" />
+                          <Text style={styles.proMetaText}>{pro.projectCount} photos</Text>
+                        </View>
+                        {/* Only show years in business for Trusty contractors */}
+                        {pro.hasTrustyProfile && pro.yearsInBusiness > 0 && (
+                          <>
+                            <View style={styles.proMetaDot} />
+                            <View style={styles.proMetaItem}>
+                              <Clock size={11} color="rgba(255,255,255,0.7)" />
+                              <Text style={styles.proMetaText}>{pro.yearsInBusiness}yr</Text>
+                            </View>
+                          </>
+                        )}
                       </View>
                     </View>
-                  </View>
-                </LinearGradient>
-              </TouchableOpacity>
-            ))}
+                  </LinearGradient>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
 
         {/* Pros List View */}
         {viewMode === 'list' && (
           <View style={styles.prosList}>
-            {filteredPros.map((pro) => (
-              <TouchableOpacity 
-                key={pro.id} 
-                style={styles.listCard}
-                activeOpacity={0.7}
-                onPress={() => setSelectedContractor(pro)}
-              >
-                <Image source={pro.image} style={styles.listCardImage} />
-                <View style={styles.listCardContent}>
-                  <View style={styles.listCardHeader}>
-                    <Text style={styles.listCardName} numberOfLines={1}>{pro.name}</Text>
-                    {pro.verified && (
-                      <View style={styles.listVerifiedBadge}>
-                        <Shield size={10} color="#22C55E" />
+            {filteredPros.map((pro) => {
+              // Get initials for placeholder
+              const initials = pro.name.split(' ').map(word => word[0]).join('').substring(0, 2).toUpperCase();
+              
+              return (
+                <TouchableOpacity 
+                  key={pro.id} 
+                  style={[styles.listCard, !pro.hasTrustyProfile && styles.listCardNoTrusty]}
+                  activeOpacity={0.7}
+                  onPress={() => setSelectedContractor(pro)}
+                >
+                  {/* Show image if has Trusty profile and image, otherwise show placeholder */}
+                  {pro.image && pro.hasTrustyProfile ? (
+                    <Image source={pro.image} style={styles.listCardImage} />
+                  ) : (
+                    <View style={styles.listCardImagePlaceholder}>
+                      <Text style={styles.listCardInitials}>{initials}</Text>
+                    </View>
+                  )}
+                  <View style={styles.listCardContent}>
+                    <View style={styles.listCardHeader}>
+                      <Text style={styles.listCardName} numberOfLines={1}>{pro.name}</Text>
+                      {favoritedIds.has(pro.id) && (
+                        <View style={styles.listFavoritedBadge}>
+                          <Heart size={12} color="#EF4444" fill="#EF4444" />
+                        </View>
+                      )}
+                      {pro.verified && pro.hasTrustyProfile && (
+                        <View style={styles.listVerifiedBadge}>
+                          <Shield size={10} color="#22C55E" />
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.listCardTradeRow}>
+                      <Text style={styles.listCardTrade}>{pro.trade}</Text>
+                      {!pro.hasTrustyProfile && (
+                        <View style={styles.listNoTrustyPill}>
+                          <Text style={styles.listNoTrustyPillText}>CompanyCam User</Text>
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.listCardMeta}>
+                      {/* Only show rating for Trusty contractors */}
+                      {pro.hasTrustyProfile && pro.rating > 0 && (
+                        <>
+                          <View style={styles.listCardRating}>
+                            <Star size={12} color="#F59E0B" fill="#F59E0B" />
+                            <Text style={styles.listCardRatingText}>{pro.rating}</Text>
+                            <Text style={styles.listCardReviews}>({pro.reviewCount})</Text>
+                          </View>
+                          <View style={styles.listCardDot} />
+                        </>
+                      )}
+                      <View style={styles.listCardStat}>
+                        <Camera size={12} color="#64748B" />
+                        <Text style={styles.listCardStatText}>{pro.projectCount} photos</Text>
                       </View>
-                    )}
+                      {/* Only show years for Trusty contractors */}
+                      {pro.hasTrustyProfile && pro.yearsInBusiness > 0 && (
+                        <>
+                          <View style={styles.listCardDot} />
+                          <View style={styles.listCardStat}>
+                            <Clock size={12} color="#64748B" />
+                            <Text style={styles.listCardStatText}>{pro.yearsInBusiness}yr</Text>
+                          </View>
+                        </>
+                      )}
+                    </View>
+                    <Text style={styles.listCardLocation}>{pro.location}</Text>
                   </View>
-                  <Text style={styles.listCardTrade}>{pro.trade}</Text>
-                  <View style={styles.listCardMeta}>
-                    <View style={styles.listCardRating}>
-                      <Star size={12} color="#F59E0B" fill="#F59E0B" />
-                      <Text style={styles.listCardRatingText}>{pro.rating}</Text>
-                      <Text style={styles.listCardReviews}>({pro.reviewCount})</Text>
-                    </View>
-                    <View style={styles.listCardDot} />
-                    <View style={styles.listCardStat}>
-                      <Camera size={12} color="#64748B" />
-                      <Text style={styles.listCardStatText}>{pro.projectCount}</Text>
-                    </View>
-                    <View style={styles.listCardDot} />
-                    <View style={styles.listCardStat}>
-                      <Clock size={12} color="#64748B" />
-                      <Text style={styles.listCardStatText}>{pro.yearsInBusiness}yr</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.listCardLocation}>{pro.location}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
         
@@ -552,27 +747,50 @@ export default function LeaderboardScreen({ onClose }: LeaderboardScreenProps) {
             contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
             showsVerticalScrollIndicator={true}
           >
-            {ALL_TRADES.map((trade) => (
-              <TouchableOpacity
-                key={trade}
-                style={[styles.tradeOption, selectedTrade === trade && styles.tradeOptionActive]}
-                onPress={() => handleSelectTrade(trade)}
-              >
-                <View style={styles.tradeOptionContent}>
-                  <View style={[styles.tradeIconContainer, selectedTrade === trade && styles.tradeIconContainerActive]}>
-                    <Briefcase size={18} color={selectedTrade === trade ? '#DC2626' : '#64748B'} />
+            {TRADE_FILTERS.map((trade) => {
+              const isFavorites = trade === 'Favorites';
+              const favoriteCount = favoritedIds.size;
+              
+              return (
+                <TouchableOpacity
+                  key={trade}
+                  style={[styles.tradeOption, selectedTrade === trade && styles.tradeOptionActive]}
+                  onPress={() => handleSelectTrade(trade)}
+                >
+                  <View style={styles.tradeOptionContent}>
+                    <View style={[
+                      styles.tradeIconContainer, 
+                      selectedTrade === trade && styles.tradeIconContainerActive,
+                      isFavorites && styles.tradeIconContainerFavorites,
+                      isFavorites && selectedTrade === trade && styles.tradeIconContainerFavoritesActive,
+                    ]}>
+                      {isFavorites ? (
+                        <Heart 
+                          size={18} 
+                          color={selectedTrade === trade ? '#EF4444' : '#EF4444'} 
+                          fill={selectedTrade === trade ? '#EF4444' : 'transparent'}
+                        />
+                      ) : (
+                        <Briefcase size={18} color={selectedTrade === trade ? '#DC2626' : '#64748B'} />
+                      )}
+                    </View>
+                    <Text style={[styles.tradeOptionText, selectedTrade === trade && styles.tradeOptionTextActive]}>
+                      {trade}
+                    </Text>
+                    {isFavorites && favoriteCount > 0 && (
+                      <View style={styles.favoriteCountBadge}>
+                        <Text style={styles.favoriteCountText}>{favoriteCount}</Text>
+                      </View>
+                    )}
                   </View>
-                  <Text style={[styles.tradeOptionText, selectedTrade === trade && styles.tradeOptionTextActive]}>
-                    {trade}
-                  </Text>
-                </View>
-                {selectedTrade === trade && (
-                  <View style={styles.checkMark}>
-                    <Text style={styles.checkMarkText}>✓</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            ))}
+                  {selectedTrade === trade && (
+                    <View style={styles.checkMark}>
+                      <Text style={styles.checkMarkText}>✓</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
           </BottomSheetScrollView>
         </BottomSheet>
       )}
@@ -587,6 +805,9 @@ export default function LeaderboardScreen({ onClose }: LeaderboardScreenProps) {
           <ContractorDetailScreen 
             contractor={selectedContractor}
             onClose={() => setSelectedContractor(null)}
+            isFavorited={favoritedIds.has(selectedContractor.id)}
+            onToggleFavorite={() => toggleFavorite(selectedContractor.id)}
+            onCollaborate={() => addToFavorites(selectedContractor.id)}
           />
         )}
       </Modal>
@@ -871,6 +1092,22 @@ const styles = StyleSheet.create({
     height: '100%',
     resizeMode: 'cover',
   },
+  proImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#E2E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  proInitials: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 32,
+    color: '#94A3B8',
+    letterSpacing: 1,
+  },
+  proCardNoTrusty: {
+    opacity: 0.85,
+  },
   proOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'flex-end',
@@ -892,6 +1129,25 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
+  verifiedBadgeOffset: {
+    left: 38, // Offset when favorited badge is shown
+  },
+  favoritedBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 4,
+  },
   ratingBadge: {
     position: 'absolute',
     top: 12,
@@ -908,6 +1164,20 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: 12,
     color: '#1E293B',
+  },
+  noTrustyBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    backgroundColor: 'rgba(100, 116, 139, 0.9)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  noTrustyBadgeText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 10,
+    color: '#FFFFFF',
   },
   proInfo: {
     gap: 4,
@@ -966,6 +1236,24 @@ const styles = StyleSheet.create({
     height: 110,
     resizeMode: 'cover',
   },
+  listCardImagePlaceholder: {
+    width: 100,
+    height: 110,
+    backgroundColor: '#E2E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  listCardInitials: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 24,
+    color: '#94A3B8',
+    letterSpacing: 1,
+  },
+  listCardNoTrusty: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+  },
   listCardContent: {
     flex: 1,
     padding: 14,
@@ -991,11 +1279,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  listFavoritedBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   listCardTrade: {
     fontFamily: 'Inter-Medium',
     fontSize: 13,
     color: '#64748B',
+  },
+  listCardTradeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     marginBottom: 8,
+  },
+  listNoTrustyPill: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  listNoTrustyPillText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 10,
+    color: '#64748B',
   },
   listCardMeta: {
     flexDirection: 'row',
@@ -1116,6 +1428,24 @@ const styles = StyleSheet.create({
   },
   tradeIconContainerActive: {
     backgroundColor: '#FECACA',
+  },
+  tradeIconContainerFavorites: {
+    backgroundColor: '#FEE2E2',
+  },
+  tradeIconContainerFavoritesActive: {
+    backgroundColor: '#FECACA',
+  },
+  favoriteCountBadge: {
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 8,
+  },
+  favoriteCountText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
+    color: '#FFFFFF',
   },
   tradeOptionText: {
     fontFamily: 'Inter-Medium',

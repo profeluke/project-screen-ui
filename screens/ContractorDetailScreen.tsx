@@ -55,16 +55,28 @@ interface ContractorData {
   about?: string;
   services?: string[];
   teamSize?: number;
+  hasTrustyProfile?: boolean;
 }
 
 interface ContractorDetailScreenProps {
   contractor: ContractorData;
   onClose: () => void;
+  isFavorited?: boolean;
+  onToggleFavorite?: () => void;
+  onCollaborate?: () => void;
 }
 
-export default function ContractorDetailScreen({ contractor, onClose }: ContractorDetailScreenProps) {
+export default function ContractorDetailScreen({ 
+  contractor, 
+  onClose,
+  isFavorited: externalIsFavorited,
+  onToggleFavorite,
+  onCollaborate,
+}: ContractorDetailScreenProps) {
   const insets = useSafeAreaInsets();
-  const [isFavorited, setIsFavorited] = useState(false);
+  // Use external state if provided, otherwise use local state
+  const [localIsFavorited, setLocalIsFavorited] = useState(false);
+  const isFavorited = externalIsFavorited !== undefined ? externalIsFavorited : localIsFavorited;
   const [showCollaborateModal, setShowCollaborateModal] = useState(false);
 
   // Portfolio images for Trusty section
@@ -76,16 +88,24 @@ export default function ContractorDetailScreen({ contractor, onClose }: Contract
     require('../assets/images/project-beach-house.jpg'),
   ];
 
+  // Check if contractor has Trusty profile
+  const hasTrustyProfile = contractor.hasTrustyProfile !== false; // Default to true for backwards compatibility
+  
+  // Get initials for placeholder
+  const initials = contractor.name.split(' ').map(word => word[0]).join('').substring(0, 2).toUpperCase();
+
   // Default values for demo
   const contractorData = {
     ...contractor,
-    phone: contractor.phone || '(402) 555-0123',
-    email: contractor.email || `info@${contractor.name.toLowerCase().replace(/[^a-z]/g, '')}.com`,
-    website: contractor.website || `www.${contractor.name.toLowerCase().replace(/[^a-z]/g, '')}.com`,
-    about: contractor.about || `${contractor.name} has been serving the Lincoln area for over ${contractor.yearsInBusiness} years. We pride ourselves on quality workmanship, transparent communication, and exceptional customer service. Our team of skilled professionals is dedicated to delivering outstanding results on every project.`,
-    services: contractor.services || getDefaultServices(contractor.trade),
-    teamSize: contractor.teamSize || Math.floor(Math.random() * 15) + 5,
-    showcaseCount: 47,
+    phone: contractor.phone || (hasTrustyProfile ? '(402) 555-0123' : undefined),
+    email: contractor.email || (hasTrustyProfile ? `info@${contractor.name.toLowerCase().replace(/[^a-z]/g, '')}.com` : undefined),
+    website: contractor.website || (hasTrustyProfile ? `www.${contractor.name.toLowerCase().replace(/[^a-z]/g, '')}.com` : undefined),
+    about: contractor.about || (hasTrustyProfile 
+      ? `${contractor.name} has been serving the Lincoln area for over ${contractor.yearsInBusiness} years. We pride ourselves on quality workmanship, transparent communication, and exceptional customer service. Our team of skilled professionals is dedicated to delivering outstanding results on every project.`
+      : undefined),
+    services: contractor.services || (hasTrustyProfile ? getDefaultServices(contractor.trade) : undefined),
+    teamSize: contractor.teamSize || (hasTrustyProfile ? Math.floor(Math.random() * 15) + 5 : undefined),
+    showcaseCount: hasTrustyProfile ? 47 : 0,
     trustyUrl: `https://trusty.app/companies/${contractor.name.toLowerCase().replace(/[^a-z]/g, '-')}`,
   };
 
@@ -171,7 +191,11 @@ export default function ContractorDetailScreen({ contractor, onClose }: Contract
   };
 
   const toggleFavorite = () => {
-    setIsFavorited(!isFavorited);
+    if (onToggleFavorite) {
+      onToggleFavorite();
+    } else {
+      setLocalIsFavorited(!localIsFavorited);
+    }
   };
 
   const handleViewTrustyPortfolio = () => {
@@ -183,9 +207,18 @@ export default function ContractorDetailScreen({ contractor, onClose }: Contract
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Hero Image */}
         <View style={styles.heroContainer}>
-          <Image source={contractor.image} style={styles.heroImage} />
+          {contractor.image ? (
+            <Image source={contractor.image} style={styles.heroImage} />
+          ) : (
+            <View style={styles.heroPlaceholder}>
+              <Text style={styles.heroInitials}>{initials}</Text>
+            </View>
+          )}
           <LinearGradient
-            colors={['rgba(0,0,0,0.4)', 'transparent', 'rgba(0,0,0,0.8)']}
+            colors={hasTrustyProfile 
+              ? ['rgba(0,0,0,0.4)', 'transparent', 'rgba(0,0,0,0.8)']
+              : ['rgba(100,116,139,0.5)', 'rgba(100,116,139,0.2)', 'rgba(100,116,139,0.9)']
+            }
             locations={[0, 0.35, 1]}
             style={styles.heroOverlay}
           />
@@ -219,9 +252,14 @@ export default function ContractorDetailScreen({ contractor, onClose }: Contract
           <View style={styles.heroInfo}>
             <View style={styles.companyNameRow}>
               <Text style={styles.companyName}>{contractor.name}</Text>
-              {contractor.verified && (
+              {contractor.verified && hasTrustyProfile && (
                 <View style={styles.verifiedBadge}>
                   <Shield size={16} color="#FFFFFF" />
+                </View>
+              )}
+              {!hasTrustyProfile && (
+                <View style={styles.companyUserBadge}>
+                  <Text style={styles.companyUserBadgeText}>CompanyCam User</Text>
                 </View>
               )}
             </View>
@@ -236,31 +274,43 @@ export default function ContractorDetailScreen({ contractor, onClose }: Contract
               </View>
             </View>
             
-            {/* Inline Stats */}
+            {/* Inline Stats - Show full stats for Trusty, limited for non-Trusty */}
             <View style={styles.inlineStats}>
-              <View style={styles.inlineStat}>
-                <Star size={12} color="#FCD34D" fill="#FCD34D" />
-                <Text style={styles.inlineStatValue}>{contractor.rating}</Text>
-                <Text style={styles.inlineStatLabel}>({contractor.reviewCount})</Text>
-              </View>
-              <View style={styles.inlineStatDot} />
+              {hasTrustyProfile && contractor.rating > 0 && (
+                <>
+                  <View style={styles.inlineStat}>
+                    <Star size={12} color="#FCD34D" fill="#FCD34D" />
+                    <Text style={styles.inlineStatValue}>{contractor.rating}</Text>
+                    <Text style={styles.inlineStatLabel}>({contractor.reviewCount})</Text>
+                  </View>
+                  <View style={styles.inlineStatDot} />
+                </>
+              )}
               <View style={styles.inlineStat}>
                 <Camera size={12} color="rgba(255,255,255,0.7)" />
                 <Text style={styles.inlineStatValue}>{contractor.projectCount.toLocaleString()}</Text>
-                <Text style={styles.inlineStatLabel}>projects</Text>
+                <Text style={styles.inlineStatLabel}>photos</Text>
               </View>
-              <View style={styles.inlineStatDot} />
-              <View style={styles.inlineStat}>
-                <Clock size={12} color="rgba(255,255,255,0.7)" />
-                <Text style={styles.inlineStatValue}>{contractor.yearsInBusiness}</Text>
-                <Text style={styles.inlineStatLabel}>yrs</Text>
-              </View>
-              <View style={styles.inlineStatDot} />
-              <View style={styles.inlineStat}>
-                <Users size={12} color="rgba(255,255,255,0.7)" />
-                <Text style={styles.inlineStatValue}>{contractorData.teamSize}</Text>
-                <Text style={styles.inlineStatLabel}>team</Text>
-              </View>
+              {hasTrustyProfile && contractor.yearsInBusiness > 0 && (
+                <>
+                  <View style={styles.inlineStatDot} />
+                  <View style={styles.inlineStat}>
+                    <Clock size={12} color="rgba(255,255,255,0.7)" />
+                    <Text style={styles.inlineStatValue}>{contractor.yearsInBusiness}</Text>
+                    <Text style={styles.inlineStatLabel}>yrs</Text>
+                  </View>
+                </>
+              )}
+              {hasTrustyProfile && contractorData.teamSize && (
+                <>
+                  <View style={styles.inlineStatDot} />
+                  <View style={styles.inlineStat}>
+                    <Users size={12} color="rgba(255,255,255,0.7)" />
+                    <Text style={styles.inlineStatValue}>{contractorData.teamSize}</Text>
+                    <Text style={styles.inlineStatLabel}>team</Text>
+                  </View>
+                </>
+              )}
             </View>
           </View>
         </View>
@@ -290,102 +340,158 @@ export default function ContractorDetailScreen({ contractor, onClose }: Contract
           </LinearGradient>
         </TouchableOpacity>
 
-        {/* Trusty Portfolio Section */}
-        <View style={styles.portfolioSection}>
-          <View style={styles.portfolioHeader}>
-            <View style={styles.portfolioTitleRow}>
-              <View style={styles.trustyBadge}>
-                <Text style={styles.trustyBadgeText}>trusty</Text>
+        {/* Trusty Portfolio Section - Only show for Trusty contractors */}
+        {hasTrustyProfile ? (
+          <View style={styles.portfolioSection}>
+            <View style={styles.portfolioHeader}>
+              <View style={styles.portfolioTitleRow}>
+                <View style={styles.trustyBadge}>
+                  <Text style={styles.trustyBadgeText}>trusty</Text>
+                </View>
+                <Text style={styles.portfolioTitle}>Portfolio</Text>
               </View>
-              <Text style={styles.portfolioTitle}>Portfolio</Text>
+              <View style={styles.portfolioStats}>
+                <ImageIcon size={14} color="#8B5CF6" />
+                <Text style={styles.portfolioStatsText}>{contractorData.showcaseCount} Showcases</Text>
+              </View>
             </View>
-            <View style={styles.portfolioStats}>
-              <ImageIcon size={14} color="#8B5CF6" />
-              <Text style={styles.portfolioStatsText}>{contractorData.showcaseCount} Showcases</Text>
+            
+            {/* Portfolio Preview Images */}
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.portfolioScroll}
+            >
+              {portfolioImages.map((image, index) => (
+                <TouchableOpacity 
+                  key={index} 
+                  style={styles.portfolioImageContainer}
+                  onPress={handleViewTrustyPortfolio}
+                  activeOpacity={0.9}
+                >
+                  <Image source={image} style={styles.portfolioImage} />
+                  {index === portfolioImages.length - 1 && (
+                    <View style={styles.portfolioImageOverlay}>
+                      <Text style={styles.portfolioMoreText}>+{contractorData.showcaseCount - portfolioImages.length}</Text>
+                      <Text style={styles.portfolioMoreLabel}>more</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {/* View on Trusty Button */}
+            <TouchableOpacity 
+              style={styles.viewTrustyButton}
+              onPress={handleViewTrustyPortfolio}
+              activeOpacity={0.8}
+            >
+              <View style={styles.viewTrustyContent}>
+                <View style={styles.viewTrustyIcon}>
+                  <ExternalLink size={18} color="#8B5CF6" />
+                </View>
+                <View>
+                  <Text style={styles.viewTrustyTitle}>View Full Portfolio on Trusty</Text>
+                  <Text style={styles.viewTrustySubtitle}>See all their showcased work and reviews</Text>
+                </View>
+              </View>
+              <ChevronRight size={20} color="#8B5CF6" />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          /* Incomplete Profile Notice - For non-Trusty contractors */
+          <View style={styles.incompleteProfileSection}>
+            <View style={styles.incompleteProfileCard}>
+              <View style={styles.incompleteIconContainer}>
+                <Shield size={24} color="#94A3B8" />
+              </View>
+              <Text style={styles.incompleteTitle}>Incomplete Profile</Text>
+              <Text style={styles.incompleteDescription}>
+                This contractor uses CompanyCam but hasn't completed their Trusty profile. We have limited information available.
+              </Text>
+              <View style={styles.incompleteDivider} />
+              <Text style={styles.incompleteNote}>
+                You can still collaborate with them on projects, but detailed business information like ratings, reviews, and portfolio showcases are not available.
+              </Text>
             </View>
           </View>
-          
-          {/* Portfolio Preview Images */}
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.portfolioScroll}
-          >
-            {portfolioImages.map((image, index) => (
-              <TouchableOpacity 
-                key={index} 
-                style={styles.portfolioImageContainer}
-                onPress={handleViewTrustyPortfolio}
-                activeOpacity={0.9}
-              >
-                <Image source={image} style={styles.portfolioImage} />
-                {index === portfolioImages.length - 1 && (
-                  <View style={styles.portfolioImageOverlay}>
-                    <Text style={styles.portfolioMoreText}>+{contractorData.showcaseCount - portfolioImages.length}</Text>
-                    <Text style={styles.portfolioMoreLabel}>more</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+        )}
 
-          {/* View on Trusty Button */}
-          <TouchableOpacity 
-            style={styles.viewTrustyButton}
-            onPress={handleViewTrustyPortfolio}
-            activeOpacity={0.8}
-          >
-            <View style={styles.viewTrustyContent}>
-              <View style={styles.viewTrustyIcon}>
-                <ExternalLink size={18} color="#8B5CF6" />
-              </View>
-              <View>
-                <Text style={styles.viewTrustyTitle}>View Full Portfolio on Trusty</Text>
-                <Text style={styles.viewTrustySubtitle}>See all their showcased work and reviews</Text>
-              </View>
-            </View>
-            <ChevronRight size={20} color="#8B5CF6" />
-          </TouchableOpacity>
-        </View>
-
-        {/* About Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>About</Text>
-          <Text style={styles.aboutText}>{contractorData.about}</Text>
-        </View>
-
-        {/* Services Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Services</Text>
-          <View style={styles.servicesGrid}>
-            {contractorData.services.map((service, index) => (
-              <View key={index} style={styles.serviceTag}>
-                <Check size={14} color="#10B981" />
-                <Text style={styles.serviceText}>{service}</Text>
-              </View>
-            ))}
+        {/* About Section - Only show if there's content */}
+        {contractorData.about ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>About</Text>
+            <Text style={styles.aboutText}>{contractorData.about}</Text>
           </View>
-        </View>
+        ) : (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>About</Text>
+            <View style={styles.noDataCard}>
+              <Text style={styles.noDataText}>No description available</Text>
+              <Text style={styles.noDataSubtext}>This contractor hasn't added their business description yet.</Text>
+            </View>
+          </View>
+        )}
 
-        {/* Contact Info Section */}
+        {/* Services Section - Only show if there's content */}
+        {contractorData.services && contractorData.services.length > 0 ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Services</Text>
+            <View style={styles.servicesGrid}>
+              {contractorData.services.map((service, index) => (
+                <View key={index} style={styles.serviceTag}>
+                  <Check size={14} color="#10B981" />
+                  <Text style={styles.serviceText}>{service}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Services</Text>
+            <View style={styles.noDataCard}>
+              <Text style={styles.noDataText}>No services listed</Text>
+              <Text style={styles.noDataSubtext}>This contractor hasn't specified their services yet.</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Contact Info Section - Only show available info */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Contact Information</Text>
-          <View style={styles.contactCard}>
-            <TouchableOpacity style={styles.contactRow} onPress={handleCall}>
-              <Phone size={18} color="#64748B" />
-              <Text style={styles.contactText}>{contractorData.phone}</Text>
-            </TouchableOpacity>
-            <View style={styles.contactDivider} />
-            <TouchableOpacity style={styles.contactRow} onPress={handleEmail}>
-              <Mail size={18} color="#64748B" />
-              <Text style={styles.contactText}>{contractorData.email}</Text>
-            </TouchableOpacity>
-            <View style={styles.contactDivider} />
-            <View style={styles.contactRow}>
-              <Building2 size={18} color="#64748B" />
-              <Text style={styles.contactText}>{contractorData.website}</Text>
+          {(contractorData.phone || contractorData.email || contractorData.website) ? (
+            <View style={styles.contactCard}>
+              {contractorData.phone && (
+                <>
+                  <TouchableOpacity style={styles.contactRow} onPress={handleCall}>
+                    <Phone size={18} color="#64748B" />
+                    <Text style={styles.contactText}>{contractorData.phone}</Text>
+                  </TouchableOpacity>
+                  {(contractorData.email || contractorData.website) && <View style={styles.contactDivider} />}
+                </>
+              )}
+              {contractorData.email && (
+                <>
+                  <TouchableOpacity style={styles.contactRow} onPress={handleEmail}>
+                    <Mail size={18} color="#64748B" />
+                    <Text style={styles.contactText}>{contractorData.email}</Text>
+                  </TouchableOpacity>
+                  {contractorData.website && <View style={styles.contactDivider} />}
+                </>
+              )}
+              {contractorData.website && (
+                <View style={styles.contactRow}>
+                  <Building2 size={18} color="#64748B" />
+                  <Text style={styles.contactText}>{contractorData.website}</Text>
+                </View>
+              )}
             </View>
-          </View>
+          ) : (
+            <View style={styles.noDataCard}>
+              <Text style={styles.noDataText}>No contact information available</Text>
+              <Text style={styles.noDataSubtext}>Contact details haven't been added yet.</Text>
+            </View>
+          )}
         </View>
 
         <View style={{ height: insets.bottom + 20 }} />
@@ -400,6 +506,12 @@ export default function ContractorDetailScreen({ contractor, onClose }: Contract
         <CollaborateProjectScreen 
           contractor={contractor}
           onClose={() => setShowCollaborateModal(false)}
+          onCollaborationStarted={() => {
+            // Auto-favorite when collaborating
+            if (onCollaborate) {
+              onCollaborate();
+            }
+          }}
         />
       </Modal>
     </View>
@@ -422,6 +534,19 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
+  },
+  heroPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#CBD5E1',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroInitials: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 72,
+    color: '#94A3B8',
+    letterSpacing: 2,
   },
   heroOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -496,6 +621,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 4,
     elevation: 4,
+  },
+  companyUserBadge: {
+    backgroundColor: 'rgba(100, 116, 139, 0.8)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  companyUserBadgeText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 11,
+    color: '#FFFFFF',
   },
   metaRow: {
     flexDirection: 'row',
@@ -773,5 +909,75 @@ const styles = StyleSheet.create({
   contactDivider: {
     height: 1,
     backgroundColor: '#F1F5F9',
+  },
+  // Incomplete Profile Section (for non-Trusty contractors)
+  incompleteProfileSection: {
+    marginHorizontal: 16,
+    marginBottom: 24,
+  },
+  incompleteProfileCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+  },
+  incompleteIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  incompleteTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 17,
+    color: '#64748B',
+    marginBottom: 8,
+  },
+  incompleteDescription: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 14,
+    color: '#94A3B8',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  incompleteDivider: {
+    width: 40,
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    marginVertical: 16,
+  },
+  incompleteNote: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 13,
+    color: '#94A3B8',
+    textAlign: 'center',
+    lineHeight: 19,
+    fontStyle: 'italic',
+  },
+  // No Data Card (for missing sections)
+  noDataCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+  },
+  noDataText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 14,
+    color: '#94A3B8',
+    marginBottom: 4,
+  },
+  noDataSubtext: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 13,
+    color: '#CBD5E1',
   },
 });
