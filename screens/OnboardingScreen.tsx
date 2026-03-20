@@ -1470,26 +1470,34 @@ export default function OnboardingScreen({ onClose }: OnboardingScreenProps) {
   const renderInviteByRole = () => {
     // Get suggested roles based on user's role - show fewer, more relevant options
     const getSuggestedRoles = () => {
-      const roleConfig: Record<string, Array<{ id: string; label: string; icon: JSX.Element }>> = {
+      const roleDescriptions: Record<string, string> = {
+        'owner': 'See every job photo in real-time — no more chasing updates',
+        'field-crew': 'Capture work on-site so the office always knows what\'s happening',
+        'operations': 'Track progress across all jobs without leaving their desk',
+        'sales': 'Fresh job photos to share with customers and close more deals',
+        'admin': 'All the photos needed for billing and documentation, already organized',
+      };
+
+      const roleConfig: Record<string, Array<{ id: string; label: string; icon: JSX.Element; description: string }>> = {
         'owner': [
-          { id: 'field-crew', label: 'Field / Crew', icon: <HardHat size={18} color="#EF4444" /> },
-          { id: 'operations', label: 'Operations Manager', icon: <Construction size={18} color="#0EA5E9" /> },
+          { id: 'field-crew', label: 'Field / Crew', icon: <HardHat size={20} color="#EF4444" />, description: roleDescriptions['field-crew'] },
+          { id: 'operations', label: 'Operations Manager', icon: <Construction size={20} color="#0EA5E9" />, description: roleDescriptions['operations'] },
         ],
         'operations': [
-          { id: 'field-crew', label: 'Field / Crew', icon: <HardHat size={18} color="#EF4444" /> },
-          { id: 'owner', label: 'Owner / Boss', icon: <Briefcase size={18} color="#3B82F6" /> },
+          { id: 'field-crew', label: 'Field / Crew', icon: <HardHat size={20} color="#EF4444" />, description: roleDescriptions['field-crew'] },
+          { id: 'owner', label: 'Owner / Boss', icon: <Briefcase size={20} color="#3B82F6" />, description: roleDescriptions['owner'] },
         ],
         'field-crew': [
-          { id: 'owner', label: 'Owner / Boss', icon: <Briefcase size={18} color="#3B82F6" /> },
-          { id: 'operations', label: 'Operations Manager', icon: <Construction size={18} color="#0EA5E9" /> },
+          { id: 'owner', label: 'Owner / Boss', icon: <Briefcase size={20} color="#3B82F6" />, description: roleDescriptions['owner'] },
+          { id: 'operations', label: 'Operations Manager', icon: <Construction size={20} color="#0EA5E9" />, description: roleDescriptions['operations'] },
         ],
         'sales': [
-          { id: 'field-crew', label: 'Field / Crew', icon: <HardHat size={18} color="#EF4444" /> },
-          { id: 'owner', label: 'Owner / Boss', icon: <Briefcase size={18} color="#3B82F6" /> },
+          { id: 'field-crew', label: 'Field / Crew', icon: <HardHat size={20} color="#EF4444" />, description: roleDescriptions['field-crew'] },
+          { id: 'owner', label: 'Owner / Boss', icon: <Briefcase size={20} color="#3B82F6" />, description: roleDescriptions['owner'] },
         ],
         'admin': [
-          { id: 'field-crew', label: 'Field / Crew', icon: <HardHat size={18} color="#EF4444" /> },
-          { id: 'owner', label: 'Owner / Boss', icon: <Briefcase size={18} color="#3B82F6" /> },
+          { id: 'field-crew', label: 'Field / Crew', icon: <HardHat size={20} color="#EF4444" />, description: roleDescriptions['field-crew'] },
+          { id: 'owner', label: 'Owner / Boss', icon: <Briefcase size={20} color="#3B82F6" />, description: roleDescriptions['owner'] },
         ],
       };
       
@@ -1508,16 +1516,17 @@ export default function OnboardingScreen({ onClose }: OnboardingScreenProps) {
         : selectedRole === 'admin' ? 'Office Admin'
         : 'Your Role';
       
-      const userRoleObj = { id: selectedRole || 'you', label: userRoleLabel, icon: userRoleIcon };
+      const userRoleObj = { id: selectedRole || 'you', label: userRoleLabel, icon: userRoleIcon, description: '' };
       const suggested = roleConfig[selectedRole || ''] || [
-        { id: 'field-crew', label: 'Field / Crew', icon: <HardHat size={18} color="#EF4444" /> },
-        { id: 'owner', label: 'Owner / Boss', icon: <Briefcase size={18} color="#3B82F6" /> },
+        { id: 'field-crew', label: 'Field / Crew', icon: <HardHat size={20} color="#EF4444" />, description: roleDescriptions['field-crew'] },
+        { id: 'owner', label: 'Owner / Boss', icon: <Briefcase size={20} color="#3B82F6" />, description: roleDescriptions['owner'] },
       ];
       
       // Add any custom roles the user has added
       const customRoleObjects = customInviteRoles.map(r => ({
         ...r,
-        icon: <UserPlus size={18} color="#8B5CF6" />
+        icon: <UserPlus size={20} color="#8B5CF6" />,
+        description: 'They\'ll see and share project photos with the whole team',
       }));
       
       return [userRoleObj, ...suggested, ...customRoleObjects];
@@ -1641,7 +1650,7 @@ export default function OnboardingScreen({ onClose }: OnboardingScreenProps) {
 
     return (
       <KeyboardAvoidingView 
-        style={styles.contentContainer}
+        style={[styles.contentContainer, { paddingHorizontal: 20 }]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
@@ -1655,13 +1664,13 @@ export default function OnboardingScreen({ onClose }: OnboardingScreenProps) {
           showsVerticalScrollIndicator={false}
         >
           <Text style={[styles.welcomeTitle, { textAlign: 'center', marginBottom: 12, fontSize: 22 }]}>
-            Great work is a team sport{'\n'}You've got 2 open spots
+            Last Step: Invite two more people
           </Text>
 
           {/* Value hint */}
           <View style={[styles.freeSeatsHint, { marginTop: 0, marginBottom: 16 }]}>
             <Text style={styles.freeSeatsHintText}>
-              These seats are <Text style={{ fontFamily: 'Inter-SemiBold', color: '#3B82F6' }}>included with your account</Text> — no extra cost.
+              <Text style={{ fontFamily: 'Inter-SemiBold', color: '#3B82F6' }}>Your first 3 users are included at no extra cost.</Text>
             </Text>
           </View>
 
@@ -1688,19 +1697,24 @@ export default function OnboardingScreen({ onClose }: OnboardingScreenProps) {
                   >
                     <View style={[
                       styles.roleInviteIconSmall,
-                      isThisUserRole && { backgroundColor: '#DBEAFE' },
+                      isThisUserRole && { backgroundColor: '#EEF2F7' },
                       hasInvite && !isThisUserRole && { backgroundColor: '#DCFCE7' }
                     ]}>
-                      {isThisUserRole ? role.icon : (hasInvite ? <Check size={14} color="#16A34A" /> : role.icon)}
+                      {isThisUserRole ? <Check size={16} color="#64748B" /> : (hasInvite ? <Check size={16} color="#16A34A" /> : role.icon)}
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={[
                         styles.roleInviteRowLabel,
-                        isThisUserRole && { color: '#3B82F6' },
+                        isThisUserRole && { color: '#64748B' },
                         hasInvite && !isThisUserRole && { color: '#16A34A' }
                       ]}>
                         {role.label}
                       </Text>
+                      {!isThisUserRole && !hasInvite && role.description ? (
+                        <Text style={styles.roleInviteRowDescription} numberOfLines={2}>
+                          {role.description}
+                        </Text>
+                      ) : null}
                       {hasInvite && !isThisUserRole && (
                         <Text style={styles.roleInviteRowEmail} numberOfLines={1}>
                           {inviteDisplay}
@@ -1734,9 +1748,12 @@ export default function OnboardingScreen({ onClose }: OnboardingScreenProps) {
             {!showAddRoleInput ? (
               <View style={styles.addRoleButton}>
                 <View style={styles.roleInviteIconSmall}>
-                  <UserPlus size={16} color="#64748B" />
+                  <UserPlus size={18} color="#64748B" />
                 </View>
-                <Text style={styles.addRoleButtonLabel}>Someone else?</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.addRoleButtonLabel}>Someone else?</Text>
+                  <Text style={styles.roleInviteRowDescription}>Add anyone on your team who should see or share photos</Text>
+                </View>
                 <TouchableOpacity 
                   style={styles.roleInviteAddButton}
                   onPress={() => setShowAddRoleInput(true)}
@@ -1779,15 +1796,12 @@ export default function OnboardingScreen({ onClose }: OnboardingScreenProps) {
             )}
           </View>
 
-          {/* Social proof */}
-          <View style={[styles.purpleSocialProof, { marginTop: 16 }]}>
-            <Text style={styles.purpleSocialProofText}>
-              <Text style={{ fontFamily: 'Inter-SemiBold' }}>3+ million</Text> photos captured daily by teams like yours
-            </Text>
-          </View>
         </ScrollView>
 
         <View style={styles.bottomButtonContainer}>
+          <Text numberOfLines={1} style={{ fontSize: 13, fontFamily: 'Inter-Regular', color: '#7C3AED', textAlign: 'center', marginBottom: 12 }}>
+            <Text style={{ fontFamily: 'Inter-SemiBold' }}>3+ million</Text> photos captured daily by teams like yours
+          </Text>
           <TouchableOpacity 
             style={[
               styles.primaryButton,
@@ -4086,16 +4100,18 @@ const styles = StyleSheet.create({
   addRoleButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 16,
     paddingHorizontal: 16,
-    gap: 12,
+    gap: 14,
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    borderStyle: 'dashed' as any,
   },
   addRoleButtonLabel: {
-    flex: 1,
     fontSize: 15,
-    fontFamily: 'Inter-Medium',
+    fontFamily: 'Inter-SemiBold',
     color: '#1E293B',
   },
   addRoleIconContainer: {
@@ -4163,30 +4179,34 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
   },
   
-  // Role-based invite styles - compact version
+  // Role-based invite styles
   roleInviteList: {
-    gap: 8,
+    gap: 10,
   },
   roleInviteRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 16,
     paddingHorizontal: 16,
-    gap: 12,
+    gap: 14,
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
   roleInviteRowActive: {
     backgroundColor: '#F8FAFC',
   },
   roleInviteRowFilled: {
     backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
   },
   roleInviteRowYou: {
-    backgroundColor: 'transparent',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 0,
   },
   roleInviteYouBadge: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#E2E8F0',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
@@ -4194,26 +4214,33 @@ const styles = StyleSheet.create({
   roleInviteYouText: {
     fontSize: 12,
     fontFamily: 'Inter-SemiBold',
-    color: '#FFFFFF',
+    color: '#64748B',
   },
   roleInviteIconSmall: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+    width: 38,
+    height: 38,
+    borderRadius: 10,
     backgroundColor: '#F1F5F9',
     justifyContent: 'center',
     alignItems: 'center',
   },
   roleInviteRowLabel: {
     fontSize: 15,
-    fontFamily: 'Inter-Medium',
+    fontFamily: 'Inter-SemiBold',
     color: '#1E293B',
+  },
+  roleInviteRowDescription: {
+    fontSize: 13,
+    fontFamily: 'Inter-Regular',
+    color: '#64748B',
+    marginTop: 3,
+    lineHeight: 17,
   },
   roleInviteRowEmail: {
     fontSize: 12,
     fontFamily: 'Inter-Regular',
     color: '#16A34A',
-    marginTop: 1,
+    marginTop: 2,
   },
   roleInviteAddButton: {
     paddingHorizontal: 12,

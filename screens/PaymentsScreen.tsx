@@ -1,334 +1,426 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeft, Plus, DollarSign, Calendar, Clock, Check, AlertCircle, Send, Edit3, MoreHorizontal } from 'lucide-react-native';
-import PaymentCreationBottomSheet from '../components/PaymentCreationBottomSheet';
-
-interface PaymentRequest {
-  id: string;
-  title: string;
-  recipient: string;
-  amount: number;
-  status: 'pending' | 'paid' | 'overdue' | 'draft';
-  dueDate: string;
-  sentDate: string;
-  description?: string;
-  projectName?: string;
-}
+import { ArrowDownLeft, Send, Sparkles, CreditCard, Eye, EyeOff, ChevronRight, TrendingUp, TrendingDown, Fuel, ShoppingBag, Wrench, Utensils, Receipt, Lock, Copy, MoreHorizontal, FileText, Clock, CheckCircle, AlertTriangle } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface PaymentsScreenProps {
   onClose: () => void;
 }
 
-const samplePayments: PaymentRequest[] = [
-  {
-    id: '1',
-    title: 'Foundation Work Invoice',
-    recipient: 'Bob Anderson',
-    amount: 15000,
-    status: 'pending',
-    dueDate: '2024-01-15',
-    sentDate: '2023-12-28',
-    description: 'Foundation excavation and concrete work',
-    projectName: 'Oakridge Residence'
-  },
-  {
-    id: '2',
-    title: 'Electrical Installation',
-    recipient: 'Sarah Anderson',
-    amount: 8500,
-    status: 'paid',
-    dueDate: '2023-12-20',
-    sentDate: '2023-12-01',
-    description: 'Complete electrical rough-in',
-    projectName: 'Oakridge Residence'
-  },
-  {
-    id: '3',
-    title: 'Material Deposit',
-    recipient: 'Mike Johnson',
-    amount: 5000,
-    status: 'overdue',
-    dueDate: '2023-12-15',
-    sentDate: '2023-11-30',
-    description: 'Lumber and materials deposit',
-    projectName: 'Downtown Office Complex'
-  },
-  {
-    id: '4',
-    title: 'Plumbing Rough-in',
-    recipient: 'David Martinez',
-    amount: 12000,
-    status: 'draft',
-    dueDate: '2024-01-30',
-    sentDate: '',
-    description: 'Plumbing installation and fixtures',
-    projectName: 'Sunset Villa Renovation'
-  },
+type TabType = 'proposals' | 'invoices' | 'card' | 'estimates';
+
+// --- Mock Data ---
+
+const proposals = [
+  { id: '1', project: 'Oakridge Kitchen Remodel', client: 'Sarah Mitchell', amount: 42500, status: 'Sent', dateSent: 'Mar 15' },
+  { id: '2', project: 'Downtown Office Buildout', client: 'Apex Partners LLC', amount: 128000, status: 'Viewed', dateSent: 'Mar 12' },
+  { id: '3', project: 'Riverside Deck Addition', client: 'James & Lori Chen', amount: 28750, status: 'Signed', dateSent: 'Mar 10' },
+  { id: '4', project: 'Master Bath Renovation', client: 'Tom Brewer', amount: 18200, status: 'Sent', dateSent: 'Mar 8' },
+  { id: '5', project: 'Garage Conversion', client: 'Diana Reeves', amount: 35400, status: 'Expired', dateSent: 'Feb 22' },
+  { id: '6', project: 'Basement Finishing', client: 'Mark & Julie Tran', amount: 52000, status: 'Signed', dateSent: 'Mar 3' },
 ];
+
+const invoices = [
+  { id: '1', invoiceNum: 'INV-1047', project: 'Oakridge Kitchen Remodel', amount: 12750, status: 'Sent', dueDate: 'Mar 25' },
+  { id: '2', invoiceNum: 'INV-1046', project: 'Downtown Office Buildout', amount: 38400, status: 'Overdue', dueDate: 'Mar 10' },
+  { id: '3', invoiceNum: 'INV-1045', project: 'Riverside Deck Addition', amount: 28750, status: 'Paid', dueDate: 'Mar 5' },
+  { id: '4', invoiceNum: 'INV-1044', project: 'Elm St Siding Repair', amount: 8900, status: 'Paid', dueDate: 'Mar 1' },
+  { id: '5', invoiceNum: 'INV-1043', project: 'Master Bath Renovation', amount: 5460, status: 'Draft', dueDate: '—' },
+  { id: '6', invoiceNum: 'INV-1042', project: 'Garage Conversion', amount: 10620, status: 'Overdue', dueDate: 'Mar 3' },
+];
+
+const transactions = [
+  { id: '1', title: 'Home Depot', category: 'Materials', amount: -1284.50, date: 'Today', icon: Wrench, iconColor: '#F59E0B', iconBg: '#FFFBEB' },
+  { id: '2', title: 'Client Payment - Oakridge', category: 'Income', amount: 15000, date: 'Today', icon: ArrowDownLeft, iconColor: '#10B981', iconBg: '#ECFDF5' },
+  { id: '3', title: 'Fuel Station', category: 'Fuel', amount: -89.40, date: 'Yesterday', icon: Fuel, iconColor: '#EF4444', iconBg: '#FEF2F2' },
+  { id: '4', title: 'Lumber Supply Co', category: 'Materials', amount: -3450.00, date: 'Yesterday', icon: ShoppingBag, iconColor: '#8B5CF6', iconBg: '#F5F3FF' },
+  { id: '5', title: 'Client Payment - Downtown', category: 'Income', amount: 8500, date: 'Mar 1', icon: ArrowDownLeft, iconColor: '#10B981', iconBg: '#ECFDF5' },
+  { id: '6', title: 'Team Lunch', category: 'Food', amount: -142.30, date: 'Mar 1', icon: Utensils, iconColor: '#EC4899', iconBg: '#FDF2F8' },
+  { id: '7', title: 'Permit Filing Fee', category: 'Permits', amount: -350.00, date: 'Feb 28', icon: Receipt, iconColor: '#6366F1', iconBg: '#EEF2FF' },
+];
+
+const estimates = [
+  { id: '1', project: 'Kitchen Renovation', amount: 42500, status: 'Sent', daysAgo: 2 },
+  { id: '2', project: 'Bathroom Remodel', amount: 18200, status: 'Draft', daysAgo: 0 },
+  { id: '3', project: 'Deck Addition', amount: 28750, status: 'Accepted', daysAgo: 5 },
+];
+
+// --- Helpers ---
+
+const getStatusStyle = (status: string) => {
+  switch (status) {
+    case 'Signed':
+    case 'Paid':
+    case 'Accepted':
+      return { bg: '#ECFDF5', text: '#10B981' };
+    case 'Sent':
+    case 'Viewed':
+      return { bg: '#EFF6FF', text: '#3B82F6' };
+    case 'Overdue':
+    case 'Expired':
+      return { bg: '#FEF2F2', text: '#EF4444' };
+    case 'Draft':
+    default:
+      return { bg: '#F1F5F9', text: '#64748B' };
+  }
+};
+
+const formatCurrency = (amount: number) => {
+  const absAmount = Math.abs(amount);
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(absAmount);
+};
+
+// --- Computed stats ---
+
+const awaitingSignatureProposals = proposals.filter(p => p.status === 'Sent' || p.status === 'Viewed');
+const signedProposals = proposals.filter(p => p.status === 'Signed');
+const awaitingSignatureTotal = awaitingSignatureProposals.reduce((s, p) => s + p.amount, 0);
+const signedTotal = signedProposals.reduce((s, p) => s + p.amount, 0);
+
+const outstandingInvoices = invoices.filter(i => i.status === 'Sent');
+const overdueInvoices = invoices.filter(i => i.status === 'Overdue');
+const paidInvoices = invoices.filter(i => i.status === 'Paid');
+const outstandingTotal = outstandingInvoices.reduce((s, i) => s + i.amount, 0);
+const overdueTotal = overdueInvoices.reduce((s, i) => s + i.amount, 0);
+const paidTotal = paidInvoices.reduce((s, i) => s + i.amount, 0);
+
+const totalOutstanding = awaitingSignatureTotal + outstandingTotal + overdueTotal;
+
+// --- Component ---
 
 export default function PaymentsScreen({ onClose }: PaymentsScreenProps) {
   const insets = useSafeAreaInsets();
-  const [payments, setPayments] = useState<PaymentRequest[]>(samplePayments);
-  const [selectedTab, setSelectedTab] = useState<'all' | 'pending' | 'paid' | 'overdue' | 'draft'>('all');
-  const [showCreationModal, setShowCreationModal] = useState(false);
+  const [showBalance, setShowBalance] = useState(true);
+  const [activeTab, setActiveTab] = useState<TabType>('proposals');
 
-  const getStatusColor = (status: PaymentRequest['status']) => {
-    switch (status) {
-      case 'paid': return '#10B981';
-      case 'pending': return '#F59E0B';
-      case 'overdue': return '#EF4444';
-      case 'draft': return '#6B7280';
-      default: return '#6B7280';
-    }
+  const tabs: { key: TabType; label: string }[] = [
+    { key: 'proposals', label: 'Proposals' },
+    { key: 'invoices', label: 'Invoices' },
+    { key: 'card', label: 'Card' },
+    { key: 'estimates', label: 'Estimates' },
+  ];
+
+  const renderStatusBadge = (status: string) => {
+    const style = getStatusStyle(status);
+    return (
+      <View style={[styles.statusBadge, { backgroundColor: style.bg }]}>
+        <Text style={[styles.statusBadgeText, { color: style.text }]}>{status}</Text>
+      </View>
+    );
   };
 
-  const getStatusIcon = (status: PaymentRequest['status']) => {
-    switch (status) {
-      case 'paid': return <Check size={16} color="#10B981" />;
-      case 'pending': return <Clock size={16} color="#F59E0B" />;
-      case 'overdue': return <AlertCircle size={16} color="#EF4444" />;
-      case 'draft': return <Edit3 size={16} color="#6B7280" />;
-      default: return <Clock size={16} color="#6B7280" />;
-    }
-  };
+  // --- Tab Content Renderers ---
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount);
-  };
-
-  const formatDate = (dateString: string) => {
-    if (!dateString) return 'Not sent';
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
-  };
-
-  const filteredPayments = payments.filter(payment => {
-    if (selectedTab === 'all') return true;
-    return payment.status === selectedTab;
-  });
-
-  const getTotalAmount = () => {
-    return filteredPayments.reduce((total, payment) => total + payment.amount, 0);
-  };
-
-  const getStatusCounts = () => {
-    return {
-      all: payments.length,
-      pending: payments.filter(p => p.status === 'pending').length,
-      paid: payments.filter(p => p.status === 'paid').length,
-      overdue: payments.filter(p => p.status === 'overdue').length,
-      draft: payments.filter(p => p.status === 'draft').length,
-    };
-  };
-
-  const statusCounts = getStatusCounts();
-
-  const handleCreatePayment = () => {
-    setShowCreationModal(true);
-  };
-
-  const handleQuickInvoice = () => {
-    console.log('Creating quick invoice...');
-    // TODO: Navigate to quick invoice creation
-  };
-
-  const handleFromTemplate = () => {
-    console.log('Creating from template...');
-    // TODO: Navigate to template selection
-  };
-
-  const handleCustomRequest = () => {
-    console.log('Creating custom request...');
-    // TODO: Navigate to custom request creation
-  };
-
-  const handlePaymentAction = (payment: PaymentRequest) => {
-    const actions = payment.status === 'draft' 
-      ? [
-          { text: 'Send Now', onPress: () => console.log('Send draft') },
-          { text: 'Edit', onPress: () => console.log('Edit draft') },
-          { text: 'Delete', style: 'destructive' as const, onPress: () => console.log('Delete draft') },
-          { text: 'Cancel', style: 'cancel' as const }
-        ]
-      : [
-          { text: 'Mark as Paid', onPress: () => console.log('Mark paid') },
-          { text: 'Send Reminder', onPress: () => console.log('Send reminder') },
-          { text: 'View Details', onPress: () => console.log('View details') },
-          { text: 'Cancel', style: 'cancel' as const }
-        ];
-
-    Alert.alert(payment.title, 'Choose an action:', actions);
-  };
-
-  const renderPaymentItem = ({ item }: { item: PaymentRequest }) => (
-    <TouchableOpacity 
-      style={styles.paymentCard}
-      onPress={() => handlePaymentAction(item)}
-    >
-      <View style={styles.paymentHeader}>
-        <View style={styles.paymentTitle}>
-          <Text style={styles.paymentTitleText}>{item.title}</Text>
-          <Text style={styles.paymentRecipient}>{item.recipient}</Text>
-        </View>
-        <View style={styles.paymentAmount}>
-          <Text style={styles.amountText}>{formatCurrency(item.amount)}</Text>
-          <View style={styles.statusContainer}>
-            {getStatusIcon(item.status)}
-            <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-              {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-            </Text>
+  const renderProposals = () => (
+    <>
+      {/* Summary Cards */}
+      <View style={styles.summaryRow}>
+        <View style={styles.summaryCard}>
+          <View style={[styles.summaryIconWrap, { backgroundColor: '#EFF6FF' }]}>
+            <Clock size={14} color="#3B82F6" />
           </View>
+          <Text style={styles.summaryCount}>{awaitingSignatureProposals.length}</Text>
+          <Text style={styles.summaryLabel}>Awaiting Signature</Text>
+          <Text style={styles.summaryAmount}>{formatCurrency(awaitingSignatureTotal)}</Text>
+        </View>
+        <View style={styles.summaryCard}>
+          <View style={[styles.summaryIconWrap, { backgroundColor: '#ECFDF5' }]}>
+            <CheckCircle size={14} color="#10B981" />
+          </View>
+          <Text style={styles.summaryCount}>{signedProposals.length}</Text>
+          <Text style={styles.summaryLabel}>Signed This Month</Text>
+          <Text style={styles.summaryAmount}>{formatCurrency(signedTotal)}</Text>
         </View>
       </View>
-      
-      {item.projectName && (
-        <Text style={styles.projectName}>📁 {item.projectName}</Text>
-      )}
-      
-      {item.description && (
-        <Text style={styles.paymentDescription}>{item.description}</Text>
-      )}
-      
-      <View style={styles.paymentFooter}>
-        <View style={styles.dateInfo}>
-          <Calendar size={14} color="#6B7280" />
-          <Text style={styles.dateText}>
-            Due: {formatDate(item.dueDate)}
-          </Text>
-        </View>
-        {item.sentDate && (
-          <View style={styles.dateInfo}>
-            <Send size={14} color="#6B7280" />
-            <Text style={styles.dateText}>
-              Sent: {formatDate(item.sentDate)}
-            </Text>
-          </View>
-        )}
+
+      {/* Proposals List */}
+      <View style={styles.listContainer}>
+        {proposals.map((p) => (
+          <TouchableOpacity key={p.id} style={styles.listItem}>
+            <View style={styles.listItemLeft}>
+              <Text style={styles.listItemTitle}>{p.project}</Text>
+              <Text style={styles.listItemSubtitle}>{p.client}</Text>
+              <Text style={styles.listItemMeta}>Sent {p.dateSent}</Text>
+            </View>
+            <View style={styles.listItemRight}>
+              <Text style={styles.listItemAmount}>{formatCurrency(p.amount)}</Text>
+              {renderStatusBadge(p.status)}
+            </View>
+          </TouchableOpacity>
+        ))}
       </View>
-    </TouchableOpacity>
+    </>
   );
 
-  const tabs = [
-    { key: 'all' as const, label: 'All', count: statusCounts.all },
-    { key: 'pending' as const, label: 'Pending', count: statusCounts.pending },
-    { key: 'paid' as const, label: 'Paid', count: statusCounts.paid },
-    { key: 'overdue' as const, label: 'Overdue', count: statusCounts.overdue },
-    { key: 'draft' as const, label: 'Drafts', count: statusCounts.draft },
-  ];
+  const renderInvoices = () => (
+    <>
+      {/* Summary Cards */}
+      <View style={styles.summaryRowThree}>
+        <View style={styles.summaryCardSmall}>
+          <Text style={styles.summaryLabelSmall}>Outstanding</Text>
+          <Text style={styles.summaryAmountBlue}>{formatCurrency(outstandingTotal)}</Text>
+        </View>
+        <View style={styles.summaryCardSmall}>
+          <Text style={styles.summaryLabelSmall}>Overdue</Text>
+          <Text style={styles.summaryAmountRed}>{formatCurrency(overdueTotal)}</Text>
+        </View>
+        <View style={styles.summaryCardSmall}>
+          <Text style={styles.summaryLabelSmall}>Paid (MTD)</Text>
+          <Text style={styles.summaryAmountGreen}>{formatCurrency(paidTotal)}</Text>
+        </View>
+      </View>
+
+      {/* Invoices List */}
+      <View style={styles.listContainer}>
+        {invoices.map((inv) => (
+          <TouchableOpacity key={inv.id} style={styles.listItem}>
+            <View style={styles.listItemLeft}>
+              <Text style={styles.listItemTitle}>{inv.invoiceNum}</Text>
+              <Text style={styles.listItemSubtitle}>{inv.project}</Text>
+              <Text style={styles.listItemMeta}>{inv.status === 'Draft' ? 'Draft' : `Due ${inv.dueDate}`}</Text>
+            </View>
+            <View style={styles.listItemRight}>
+              <Text style={styles.listItemAmount}>{formatCurrency(inv.amount)}</Text>
+              {renderStatusBadge(inv.status)}
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </>
+  );
+
+  const renderCard = () => (
+    <>
+      {/* Digital Card */}
+      <View style={styles.cardWrapper}>
+        <LinearGradient
+          colors={['#1E293B', '#0F172A']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.digitalCard}
+        >
+          <View style={styles.cardTopRow}>
+            <View>
+              <Text style={styles.cardLabel}>Available Balance</Text>
+              <View style={styles.balanceRow}>
+                <Text style={styles.cardBalance}>
+                  {showBalance ? '$24,831.50' : '••••••'}
+                </Text>
+                <TouchableOpacity onPress={() => setShowBalance(!showBalance)} style={styles.eyeButton}>
+                  {showBalance ? <Eye size={18} color="#94A3B8" /> : <EyeOff size={18} color="#94A3B8" />}
+                </TouchableOpacity>
+              </View>
+            </View>
+            <View style={styles.cardChip}>
+              <View style={styles.chipLines}>
+                <View style={styles.chipLine} />
+                <View style={styles.chipLine} />
+                <View style={styles.chipLine} />
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.cardBottomRow}>
+            <View>
+              <Text style={styles.cardNumberLabel}>CARD NUMBER</Text>
+              <View style={styles.cardNumberRow}>
+                <Text style={styles.cardNumber}>•••• •••• •••• 4829</Text>
+                <TouchableOpacity style={styles.copyButton}>
+                  <Copy size={14} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+            </View>
+            <View style={styles.cardMeta}>
+              <View>
+                <Text style={styles.cardMetaLabel}>EXPIRES</Text>
+                <Text style={styles.cardMetaValue}>09/28</Text>
+              </View>
+              <View style={styles.lockIcon}>
+                <Lock size={14} color="#64748B" />
+              </View>
+            </View>
+          </View>
+
+          <Text style={styles.cardHolder}>EMILY CHEN</Text>
+        </LinearGradient>
+      </View>
+
+      {/* Quick Stats */}
+      <View style={styles.statsRow}>
+        <View style={styles.statCard}>
+          <View style={[styles.statIndicator, { backgroundColor: '#ECFDF5' }]}>
+            <TrendingUp size={14} color="#10B981" />
+          </View>
+          <Text style={styles.statAmount}>$47,200</Text>
+          <Text style={styles.statLabel}>Income (MTD)</Text>
+        </View>
+        <View style={styles.statCard}>
+          <View style={[styles.statIndicator, { backgroundColor: '#FEF2F2' }]}>
+            <TrendingDown size={14} color="#EF4444" />
+          </View>
+          <Text style={styles.statAmount}>$12,840</Text>
+          <Text style={styles.statLabel}>Spent (MTD)</Text>
+        </View>
+        <View style={styles.statCard}>
+          <View style={[styles.statIndicator, { backgroundColor: '#FFFBEB' }]}>
+            <Receipt size={14} color="#F59E0B" />
+          </View>
+          <Text style={styles.statAmount}>$5,000</Text>
+          <Text style={styles.statLabel}>Pending</Text>
+        </View>
+      </View>
+
+      {/* Transactions */}
+      <View style={styles.transactionsList}>
+        {transactions.map((tx, index) => {
+          const Icon = tx.icon;
+          const showDateHeader = index === 0 || transactions[index - 1].date !== tx.date;
+          return (
+            <View key={tx.id}>
+              {showDateHeader && (
+                <Text style={styles.transactionDateHeader}>{tx.date}</Text>
+              )}
+              <TouchableOpacity style={styles.transactionItem}>
+                <View style={[styles.transactionIcon, { backgroundColor: tx.iconBg }]}>
+                  <Icon size={18} color={tx.iconColor} />
+                </View>
+                <View style={styles.transactionInfo}>
+                  <Text style={styles.transactionTitle}>{tx.title}</Text>
+                  <Text style={styles.transactionCategory}>{tx.category}</Text>
+                </View>
+                <Text style={[
+                  styles.transactionAmount,
+                  tx.amount > 0 && styles.transactionAmountPositive,
+                ]}>
+                  {tx.amount > 0 ? '+' : '-'}{formatCurrency(tx.amount)}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          );
+        })}
+      </View>
+      <TouchableOpacity style={styles.seeAllButton}>
+        <Text style={styles.seeAllText}>See all transactions</Text>
+        <ChevronRight size={16} color="#3B82F6" />
+      </TouchableOpacity>
+    </>
+  );
+
+  const renderEstimates = () => (
+    <>
+      {/* Create AI Estimate */}
+      <TouchableOpacity style={styles.newEstimateCard}>
+        <LinearGradient
+          colors={['#7C3AED', '#6D28D9']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.newEstimateGradient}
+        >
+          <Sparkles size={24} color="#FFFFFF" />
+          <View style={styles.newEstimateContent}>
+            <Text style={styles.newEstimateTitle}>Create AI Estimate</Text>
+            <Text style={styles.newEstimateDesc}>Describe the project and get an instant cost breakdown</Text>
+          </View>
+          <ChevronRight size={20} color="rgba(255,255,255,0.6)" />
+        </LinearGradient>
+      </TouchableOpacity>
+
+      <View style={styles.estimatesList}>
+        {estimates.map((est) => (
+          <TouchableOpacity key={est.id} style={styles.estimateItem}>
+            <View style={styles.estimateInfo}>
+              <Text style={styles.estimateProject}>{est.project}</Text>
+              <Text style={styles.estimateMeta}>
+                {est.status} {est.daysAgo === 0 ? '• Just now' : `• ${est.daysAgo}d ago`}
+              </Text>
+            </View>
+            <View style={styles.estimateRight}>
+              <Text style={styles.estimateAmount}>{formatCurrency(est.amount)}</Text>
+              {renderStatusBadge(est.status)}
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <TouchableOpacity style={styles.seeAllButton}>
+        <Text style={styles.seeAllText}>See all estimates</Text>
+        <ChevronRight size={16} color="#3B82F6" />
+      </TouchableOpacity>
+    </>
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: Math.max(insets.top + 16, 32) }]}>
-        <TouchableOpacity style={styles.backButton} onPress={onClose}>
-          <ArrowLeft size={24} color="#1E293B" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Payments</Text>
-        <TouchableOpacity style={styles.createButton} onPress={handleCreatePayment}>
-          <Plus size={24} color="#FFFFFF" />
+      {/* Dark Header */}
+      <View style={[styles.header, { paddingTop: Math.max(insets.top + 12, 28) }]}>
+        <View style={styles.headerSpacer} />
+        <Text style={styles.headerTitle}>Money</Text>
+        <TouchableOpacity style={styles.moreButton}>
+          <MoreHorizontal size={22} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
 
-      {/* Summary Card */}
-      <View style={styles.summaryCard}>
-        <View style={styles.summaryHeader}>
-          <DollarSign size={24} color="#3B82F6" />
-          <Text style={styles.summaryTitle}>Total {selectedTab === 'all' ? 'Outstanding' : selectedTab.charAt(0).toUpperCase() + selectedTab.slice(1)}</Text>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Quick Overview */}
+        <View style={styles.overviewSection}>
+          <Text style={styles.overviewTotal}>{formatCurrency(totalOutstanding)}</Text>
+          <Text style={styles.overviewLabel}>Total Outstanding</Text>
+          <Text style={styles.overviewDetail}>
+            You have {awaitingSignatureProposals.length} proposal{awaitingSignatureProposals.length !== 1 ? 's' : ''} awaiting signature
+          </Text>
         </View>
-        <Text style={styles.summaryAmount}>{formatCurrency(getTotalAmount())}</Text>
-        <Text style={styles.summarySubtext}>
-          {filteredPayments.length} payment{filteredPayments.length !== 1 ? 's' : ''}
-        </Text>
-      </View>
 
-      {/* Tabs */}
-      <View style={styles.tabsContainer}>
-        <ScrollView 
-          horizontal 
+        {/* Tab Bar — pill style */}
+        <ScrollView
+          horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabsScroll}
+          contentContainerStyle={styles.tabBarContent}
+          style={styles.tabBarScroll}
         >
           {tabs.map((tab) => (
             <TouchableOpacity
               key={tab.key}
-              style={[
-                styles.tab,
-                selectedTab === tab.key && styles.tabActive
-              ]}
-              onPress={() => setSelectedTab(tab.key)}
+              style={[styles.tab, activeTab === tab.key && styles.tabActive]}
+              onPress={() => setActiveTab(tab.key)}
             >
-              <Text style={[
-                styles.tabText,
-                selectedTab === tab.key && styles.tabTextActive
-              ]}>
+              <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
                 {tab.label}
               </Text>
-              {tab.count > 0 && (
-                <View style={[
-                  styles.tabBadge,
-                  selectedTab === tab.key && styles.tabBadgeActive
-                ]}>
-                  <Text style={[
-                    styles.tabBadgeText,
-                    selectedTab === tab.key && styles.tabBadgeTextActive
-                  ]}>
-                    {tab.count}
-                  </Text>
-                </View>
-              )}
             </TouchableOpacity>
           ))}
         </ScrollView>
-      </View>
 
-      {/* Payments List */}
-      <FlatList
-        data={filteredPayments}
-        keyExtractor={(item) => item.id}
-        renderItem={renderPaymentItem}
-        style={styles.paymentsList}
-        contentContainerStyle={styles.paymentsListContent}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <DollarSign size={64} color="#E5E7EB" />
-            <Text style={styles.emptyTitle}>No {selectedTab === 'all' ? '' : selectedTab} payments</Text>
-            <Text style={styles.emptyText}>
-              {selectedTab === 'draft' 
-                ? 'Create a new payment request to get started'
-                : 'Payment requests will appear here when created'
-              }
-            </Text>
-            <TouchableOpacity style={styles.emptyButton} onPress={handleCreatePayment}>
-              <Plus size={16} color="#FFFFFF" />
-              <Text style={styles.emptyButtonText}>Create Payment</Text>
-            </TouchableOpacity>
+        {/* Tab Content */}
+        {activeTab === 'proposals' && renderProposals()}
+        {activeTab === 'invoices' && renderInvoices()}
+        {activeTab === 'card' && renderCard()}
+        {activeTab === 'estimates' && renderEstimates()}
+
+        {/* AI Spending Insight — always visible */}
+        <View style={styles.insightsCard}>
+          <View style={styles.insightsHeader}>
+            <Sparkles size={16} color="#7C3AED" />
+            <Text style={styles.insightsTitle}>AI Spending Insight</Text>
           </View>
-        }
-      />
-
-      <PaymentCreationBottomSheet
-        visible={showCreationModal}
-        onClose={() => setShowCreationModal(false)}
-        onQuickInvoice={handleQuickInvoice}
-        onFromTemplate={handleFromTemplate}
-        onCustomRequest={handleCustomRequest}
-      />
+          <Text style={styles.insightsText}>
+            Your material costs are 12% lower than last month. You've saved $1,840 on lumber by switching suppliers.
+          </Text>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
+const { width } = Dimensions.get('window');
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0F172A',
   },
   header: {
     flexDirection: 'row',
@@ -336,76 +428,78 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingBottom: 16,
+    backgroundColor: '#0F172A',
   },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F1F5F9',
-    justifyContent: 'center',
-    alignItems: 'center',
+  headerSpacer: {
+    width: 40,
+    height: 40,
   },
   headerTitle: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 24,
-    color: '#1E293B',
+    fontFamily: 'Inter-Bold',
+    fontSize: 20,
+    color: '#FFFFFF',
   },
-  createButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#3B82F6',
+  moreButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  summaryCard: {
+  scrollView: {
+    flex: 1,
     backgroundColor: '#F8FAFC',
-    marginHorizontal: 20,
-    padding: 20,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 24,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
   },
-  summaryHeader: {
-    flexDirection: 'row',
+  scrollContent: {
+    paddingBottom: 100,
+  },
+
+  // Overview
+  overviewSection: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 20,
     alignItems: 'center',
-    marginBottom: 8,
   },
-  summaryTitle: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 16,
-    color: '#64748B',
-    marginLeft: 8,
-  },
-  summaryAmount: {
+  overviewTotal: {
     fontFamily: 'Inter-Bold',
     fontSize: 32,
     color: '#1E293B',
     marginBottom: 4,
   },
-  summarySubtext: {
-    fontFamily: 'Inter-Regular',
+  overviewLabel: {
+    fontFamily: 'Inter-Medium',
     fontSize: 14,
     color: '#64748B',
+    marginBottom: 6,
   },
-  tabsContainer: {
-    marginBottom: 16,
+  overviewDetail: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 13,
+    color: '#94A3B8',
   },
-  tabsScroll: {
+
+  // Tabs — pill style (ChatScreen pattern)
+  tabBarScroll: {
+    marginBottom: 20,
+  },
+  tabBarContent: {
     paddingHorizontal: 20,
+    gap: 8,
   },
   tab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 999,
     backgroundColor: '#F1F5F9',
-    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   tabActive: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#1E293B',
+    borderColor: '#1E293B',
   },
   tabText: {
     fontFamily: 'Inter-Medium',
@@ -413,143 +507,425 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   tabTextActive: {
+    fontFamily: 'Inter-SemiBold',
     color: '#FFFFFF',
   },
-  tabBadge: {
-    backgroundColor: '#E2E8F0',
-    borderRadius: 10,
+
+  // Summary Cards (Proposals)
+  summaryRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    gap: 12,
+    marginBottom: 20,
+  },
+  summaryCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 16,
+    alignItems: 'flex-start',
+  },
+  summaryIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  summaryCount: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 22,
+    color: '#1E293B',
+    marginBottom: 2,
+  },
+  summaryLabel: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 12,
+    color: '#94A3B8',
+    marginBottom: 6,
+  },
+  summaryAmount: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+    color: '#1E293B',
+  },
+
+  // Summary Cards (Invoices — 3 columns)
+  summaryRowThree: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    gap: 10,
+    marginBottom: 20,
+  },
+  summaryCardSmall: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    alignItems: 'flex-start',
+  },
+  summaryLabelSmall: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 11,
+    color: '#94A3B8',
+    marginBottom: 6,
+  },
+  summaryAmountBlue: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 15,
+    color: '#3B82F6',
+  },
+  summaryAmountRed: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 15,
+    color: '#EF4444',
+  },
+  summaryAmountGreen: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 15,
+    color: '#10B981',
+  },
+
+  // List Items (Proposals / Invoices)
+  listContainer: {
+    paddingHorizontal: 20,
+  },
+  listItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#F1F5F9',
+  },
+  listItemLeft: {
+    flex: 1,
+    marginRight: 12,
+  },
+  listItemTitle: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 15,
+    color: '#1E293B',
+    marginBottom: 3,
+  },
+  listItemSubtitle: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 13,
+    color: '#64748B',
+    marginBottom: 2,
+  },
+  listItemMeta: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 12,
+    color: '#94A3B8',
+  },
+  listItemRight: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  listItemAmount: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 15,
+    color: '#1E293B',
+  },
+
+  // Status Badge
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  statusBadgeText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 11,
+  },
+
+  // Digital Card
+  cardWrapper: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  digitalCard: {
+    borderRadius: 20,
+    padding: 24,
+    minHeight: 200,
+    justifyContent: 'space-between',
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 24,
+  },
+  cardLabel: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 13,
+    color: '#94A3B8',
+    marginBottom: 6,
+  },
+  balanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  cardBalance: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 32,
+    color: '#FFFFFF',
+  },
+  eyeButton: {
+    padding: 4,
+  },
+  cardChip: {
+    width: 40,
+    height: 30,
+    borderRadius: 6,
+    backgroundColor: '#334155',
+    justifyContent: 'center',
     paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginLeft: 6,
   },
-  tabBadgeActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  chipLines: {
+    gap: 3,
   },
-  tabBadgeText: {
+  chipLine: {
+    height: 2,
+    backgroundColor: '#475569',
+    borderRadius: 1,
+  },
+  cardBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginBottom: 8,
+  },
+  cardNumberLabel: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 10,
+    color: '#64748B',
+    marginBottom: 4,
+    letterSpacing: 1,
+  },
+  cardNumberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  cardNumber: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 15,
+    color: '#CBD5E1',
+    letterSpacing: 2,
+  },
+  copyButton: {
+    padding: 4,
+  },
+  cardMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  cardMetaLabel: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 10,
+    color: '#64748B',
+    marginBottom: 4,
+    letterSpacing: 1,
+  },
+  cardMetaValue: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 14,
+    color: '#CBD5E1',
+  },
+  lockIcon: {
+    marginBottom: -2,
+  },
+  cardHolder: {
     fontFamily: 'Inter-SemiBold',
     fontSize: 12,
     color: '#64748B',
+    letterSpacing: 2,
   },
-  tabBadgeTextActive: {
-    color: '#FFFFFF',
-  },
-  paymentsList: {
-    flex: 1,
-  },
-  paymentsListContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 100,
-  },
-  paymentCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  paymentHeader: {
+
+  // Stats
+  statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
+    paddingHorizontal: 20,
+    gap: 10,
+    marginBottom: 20,
   },
-  paymentTitle: {
+  statCard: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    alignItems: 'flex-start',
   },
-  paymentTitleText: {
-    fontFamily: 'Inter-SemiBold',
+  statIndicator: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  statAmount: {
+    fontFamily: 'Inter-Bold',
     fontSize: 16,
     color: '#1E293B',
     marginBottom: 2,
   },
-  paymentRecipient: {
+  statLabel: {
     fontFamily: 'Inter-Regular',
-    fontSize: 14,
-    color: '#64748B',
+    fontSize: 11,
+    color: '#94A3B8',
   },
-  paymentAmount: {
-    alignItems: 'flex-end',
-  },
-  amountText: {
-    fontFamily: 'Inter-Bold',
-    fontSize: 18,
-    color: '#1E293B',
-    marginBottom: 4,
-  },
-  statusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  statusText: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 12,
-  },
-  projectName: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 12,
-    color: '#3B82F6',
-    marginBottom: 8,
-  },
-  paymentDescription: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 14,
-    color: '#64748B',
-    marginBottom: 12,
-  },
-  paymentFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  dateInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  dateText: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 64,
-    paddingHorizontal: 32,
-  },
-  emptyTitle: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 20,
-    color: '#1E293B',
-    marginTop: 16,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  emptyText: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 16,
-    color: '#64748B',
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 24,
-  },
-  emptyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#3B82F6',
+
+  // Transactions
+  transactionsList: {
     paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 20,
-    gap: 8,
   },
-  emptyButtonText: {
+  transactionDateHeader: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 13,
+    color: '#94A3B8',
+    marginTop: 8,
+    marginBottom: 10,
+    paddingHorizontal: 4,
+  },
+  transactionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    gap: 14,
+  },
+  transactionIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  transactionInfo: {
+    flex: 1,
+  },
+  transactionTitle: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 15,
+    color: '#1E293B',
+    marginBottom: 2,
+  },
+  transactionCategory: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 13,
+    color: '#94A3B8',
+  },
+  transactionAmount: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 15,
+    color: '#1E293B',
+  },
+  transactionAmountPositive: {
+    color: '#10B981',
+  },
+  seeAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 4,
+  },
+  seeAllText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 14,
+    color: '#3B82F6',
+  },
+
+  // AI Estimates
+  newEstimateCard: {
+    marginHorizontal: 20,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  newEstimateGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 18,
+    gap: 14,
+  },
+  newEstimateContent: {
+    flex: 1,
+  },
+  newEstimateTitle: {
     fontFamily: 'Inter-SemiBold',
     fontSize: 16,
     color: '#FFFFFF',
+    marginBottom: 4,
   },
-}); 
+  newEstimateDesc: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.7)',
+  },
+  estimatesList: {
+    paddingHorizontal: 20,
+  },
+  estimateItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#F1F5F9',
+  },
+  estimateInfo: {
+    flex: 1,
+  },
+  estimateProject: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 15,
+    color: '#1E293B',
+    marginBottom: 3,
+  },
+  estimateMeta: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 13,
+    color: '#94A3B8',
+  },
+  estimateRight: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  estimateAmount: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 15,
+    color: '#1E293B',
+  },
+
+  // Insights
+  insightsCard: {
+    marginHorizontal: 20,
+    backgroundColor: '#F5F3FF',
+    borderRadius: 14,
+    padding: 16,
+    marginTop: 8,
+  },
+  insightsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  insightsTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+    color: '#7C3AED',
+  },
+  insightsText: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 14,
+    color: '#4C1D95',
+    lineHeight: 20,
+  },
+});

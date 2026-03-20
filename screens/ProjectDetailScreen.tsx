@@ -279,19 +279,25 @@ export default function ProjectDetailScreen({ onClose }: ProjectDetailScreenProp
   const tagsBottomSheetRef = useRef<BottomSheet>(null);
   
   // Sample photo data with metadata
+  const DAY_MS = 24 * 60 * 60 * 1000;
   const photoData = [
+    // Today
     { id: '1', source: require('../assets/images/thumb-warehouse.jpg'), takenBy: 'Sarah Anderson', tags: ['Exterior', 'Foundation'], timestamp: new Date(Date.now() - 15 * 1000) },
-    { id: '2', source: require('../assets/images/thumb-family-home.jpg'), takenBy: 'Sarah Anderson', tags: ['Interior', 'Electrical'], timestamp: new Date(Date.now() - 15 * 1000) },
-    { id: '3', source: require('../assets/images/thumb-beach-house.jpg'), takenBy: 'Mike Johnson', tags: ['Exterior', 'Landscaping'], timestamp: new Date(Date.now() - 4 * 60 * 1000) },
-    { id: '4', source: require('../assets/images/thumb-modern-loft.jpg'), takenBy: 'Mike Johnson', tags: ['Interior', 'Framing'], timestamp: new Date(Date.now() - 4 * 60 * 1000) },
-    { id: '5', source: require('../assets/images/thumb-downtown-office.jpg'), takenBy: 'David Martinez', tags: ['Exterior', 'Roofing'], timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000) },
-    { id: '6', source: require('../assets/images/thumb-sunset-villa.jpg'), takenBy: 'David Martinez', tags: ['Interior', 'Plumbing'], timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000) },
-    { id: '7', source: require('../assets/images/thumb-warehouse.jpg'), takenBy: 'James Wilson', tags: ['Exterior', 'Foundation'], timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000) },
-    { id: '8', source: require('../assets/images/thumb-beach-house.jpg'), takenBy: 'James Wilson', tags: ['Interior', 'Electrical'], timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000) },
-    { id: '9', source: require('../assets/images/thumb-family-home.jpg'), takenBy: 'Sarah Anderson', tags: ['Exterior', 'Framing'], timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000) },
-    { id: '10', source: require('../assets/images/thumb-modern-loft.jpg'), takenBy: 'Sarah Anderson', tags: ['Interior', 'Plumbing'], timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000) },
-    { id: '11', source: require('../assets/images/thumb-sunset-villa.jpg'), takenBy: 'Mike Johnson', tags: ['Exterior', 'Roofing'], timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-    { id: '12', source: require('../assets/images/thumb-downtown-office.jpg'), takenBy: 'David Martinez', tags: ['Interior', 'Landscaping'], timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+    { id: '2', source: require('../assets/images/thumb-family-home.jpg'), takenBy: 'Sarah Anderson', tags: ['Interior', 'Electrical'], timestamp: new Date(Date.now() - 4 * 60 * 1000) },
+    { id: '3', source: require('../assets/images/thumb-beach-house.jpg'), takenBy: 'Mike Johnson', tags: ['Exterior', 'Landscaping'], timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000) },
+    // Yesterday
+    { id: '4', source: require('../assets/images/thumb-modern-loft.jpg'), takenBy: 'Mike Johnson', tags: ['Interior', 'Framing'], timestamp: new Date(Date.now() - 1 * DAY_MS - 3 * 60 * 60 * 1000) },
+    { id: '5', source: require('../assets/images/thumb-downtown-office.jpg'), takenBy: 'David Martinez', tags: ['Exterior', 'Roofing'], timestamp: new Date(Date.now() - 1 * DAY_MS - 5 * 60 * 60 * 1000) },
+    // 2 days ago
+    { id: '6', source: require('../assets/images/thumb-sunset-villa.jpg'), takenBy: 'David Martinez', tags: ['Interior', 'Plumbing'], timestamp: new Date(Date.now() - 2 * DAY_MS - 2 * 60 * 60 * 1000) },
+    { id: '7', source: require('../assets/images/thumb-warehouse.jpg'), takenBy: 'James Wilson', tags: ['Exterior', 'Foundation'], timestamp: new Date(Date.now() - 2 * DAY_MS - 4 * 60 * 60 * 1000) },
+    { id: '8', source: require('../assets/images/thumb-beach-house.jpg'), takenBy: 'James Wilson', tags: ['Interior', 'Electrical'], timestamp: new Date(Date.now() - 2 * DAY_MS - 6 * 60 * 60 * 1000) },
+    // 3 days ago
+    { id: '9', source: require('../assets/images/thumb-family-home.jpg'), takenBy: 'Sarah Anderson', tags: ['Exterior', 'Framing'], timestamp: new Date(Date.now() - 3 * DAY_MS - 1 * 60 * 60 * 1000) },
+    { id: '10', source: require('../assets/images/thumb-modern-loft.jpg'), takenBy: 'Sarah Anderson', tags: ['Interior', 'Plumbing'], timestamp: new Date(Date.now() - 3 * DAY_MS - 5 * 60 * 60 * 1000) },
+    // 4 days ago
+    { id: '11', source: require('../assets/images/thumb-sunset-villa.jpg'), takenBy: 'Mike Johnson', tags: ['Exterior', 'Roofing'], timestamp: new Date(Date.now() - 4 * DAY_MS - 2 * 60 * 60 * 1000) },
+    { id: '12', source: require('../assets/images/thumb-downtown-office.jpg'), takenBy: 'David Martinez', tags: ['Interior', 'Landscaping'], timestamp: new Date(Date.now() - 4 * DAY_MS - 7 * 60 * 60 * 1000) },
   ];
 
   const handleCreatePress = () => {
@@ -858,9 +864,35 @@ ${selectedPrompt.prompt}`;
     return filteredPhotos;
   };
 
+  const getDateLabel = (date: Date) => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const photoDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const diffDays = Math.round((today.getTime() - photoDay.getTime()) / (24 * 60 * 60 * 1000));
+
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    return date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  };
+
+  const groupPhotosByDate = (photos: typeof photoData) => {
+    const groups: { label: string; photos: typeof photoData }[] = [];
+    const map = new Map<string, typeof photoData>();
+
+    for (const photo of photos) {
+      const key = getDateLabel(photo.timestamp);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(photo);
+    }
+
+    map.forEach((photos, label) => groups.push({ label, photos }));
+    return groups;
+  };
+
   const renderPhotoFeed = () => {
     const filteredPhotos = getFilteredPhotos();
-    
+    const groups = groupPhotosByDate(filteredPhotos);
+
     return (
       <View style={styles.photoFeedContainer}>
         <ScrollView
@@ -873,13 +905,20 @@ ${selectedPrompt.prompt}`;
               <Text style={styles.emptyPhotosText}>No photos match your filters</Text>
             </View>
           ) : (
-            <View style={styles.photoGrid}>
-              {filteredPhotos.map((photo) => (
-                <TouchableOpacity key={photo.id} style={styles.photoGridItem} activeOpacity={0.9}>
-                  <Image source={photo.source} style={styles.photoGridImage} />
-                </TouchableOpacity>
-              ))}
-            </View>
+            groups.map((group) => (
+              <View key={group.label} style={styles.photoDateGroup}>
+                <View style={styles.photoDateHeader}>
+                  <Text style={styles.photoDateLabel}>{group.label}</Text>
+                </View>
+                <View style={styles.photoGrid}>
+                  {group.photos.map((photo) => (
+                    <TouchableOpacity key={photo.id} style={styles.photoGridItem} activeOpacity={0.9}>
+                      <Image source={photo.source} style={styles.photoGridImage} />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            ))
           )}
         </ScrollView>
       </View>
@@ -1429,6 +1468,29 @@ ${selectedPrompt.prompt}`;
               >
                 <Text style={styles.activitySectionTitle}>Photos</Text>
               </TouchableOpacity>
+              <View style={styles.photoHeaderActions}>
+                <TouchableOpacity
+                  style={[styles.photoHeaderIconBtn, selectedTakenBy !== 'All' && styles.photoHeaderIconBtnActive]}
+                  onPress={handleTakenByPress}
+                >
+                  <Users size={16} color={selectedTakenBy !== 'All' ? '#FFFFFF' : '#64748B'} />
+                  <ChevronDown size={12} color={selectedTakenBy !== 'All' ? '#FFFFFF' : '#94A3B8'} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.photoHeaderIconBtn, selectedTag !== 'All' && styles.photoHeaderIconBtnActive]}
+                  onPress={handleTagsPress}
+                >
+                  <Tag size={16} color={selectedTag !== 'All' ? '#FFFFFF' : '#64748B'} />
+                  <ChevronDown size={12} color={selectedTag !== 'All' ? '#FFFFFF' : '#94A3B8'} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.photoHeaderAddBtn}
+                  onPress={() => setShowPhotoUploadOptions(true)}
+                >
+                  <Plus size={14} color="#1E293B" />
+                  <Text style={styles.photoHeaderAddText}>Add</Text>
+                </TouchableOpacity>
+              </View>
             </View>
               
               {showActivityEmptyState ? (
@@ -1446,67 +1508,6 @@ ${selectedPrompt.prompt}`;
                 </View>
               ) : (
                 <>
-                  {/* Photo Filter Tabs */}
-                  <View style={styles.photoFilterContainer}>
-                    <ScrollView 
-                      horizontal 
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.photoFilterScroll}
-                    >
-                      {/* All Tab */}
-                      <TouchableOpacity
-                        style={[
-                          styles.photoFilterTab,
-                          selectedPhotoFilter === 'All' && styles.photoFilterTabActive
-                        ]}
-                        onPress={() => setSelectedPhotoFilter('All')}
-                      >
-                        <Text style={[
-                          styles.photoFilterText,
-                          selectedPhotoFilter === 'All' && styles.photoFilterTextActive
-                        ]}>
-                          All
-                        </Text>
-                      </TouchableOpacity>
-
-                      {/* Taken By Dropdown */}
-                      <TouchableOpacity
-                        style={[
-                          styles.photoFilterTab,
-                          styles.photoFilterDropdown,
-                          selectedTakenBy !== 'All' && styles.photoFilterTabActive
-                        ]}
-                        onPress={handleTakenByPress}
-                      >
-                        <Text style={[
-                          styles.photoFilterText,
-                          selectedTakenBy !== 'All' && styles.photoFilterTextActive
-                        ]}>
-                          {selectedTakenBy === 'All' ? 'Taken By' : selectedTakenBy.split(' ')[0]}
-                        </Text>
-                        <ChevronDown size={14} color={selectedTakenBy !== 'All' ? '#FFFFFF' : '#64748B'} />
-                      </TouchableOpacity>
-
-                      {/* Tags Dropdown */}
-                      <TouchableOpacity
-                        style={[
-                          styles.photoFilterTab,
-                          styles.photoFilterDropdown,
-                          selectedTag !== 'All' && styles.photoFilterTabActive
-                        ]}
-                        onPress={handleTagsPress}
-                      >
-                        <Text style={[
-                          styles.photoFilterText,
-                          selectedTag !== 'All' && styles.photoFilterTextActive
-                        ]}>
-                          {selectedTag === 'All' ? 'Tags' : selectedTag}
-                        </Text>
-                        <ChevronDown size={14} color={selectedTag !== 'All' ? '#FFFFFF' : '#64748B'} />
-                      </TouchableOpacity>
-                    </ScrollView>
-                  </View>
-
                   {/* Photo Grid */}
                   {renderPhotoFeed()}
                 </>
@@ -3145,13 +3146,36 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
   },
-  photoFilterContainer: {
-    marginBottom: 16,
-    paddingHorizontal: 16,
-  },
-  photoFilterScroll: {
-    paddingVertical: 4,
+  photoHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
+  },
+  photoHeaderIconBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: 'transparent',
+  },
+  photoHeaderIconBtnActive: {
+    backgroundColor: '#1F2937',
+  },
+  photoHeaderAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+  },
+  photoHeaderAddText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 13,
+    color: '#1E293B',
   },
   photoFilterTab: {
     paddingHorizontal: 16,
@@ -3183,18 +3207,34 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontFamily: 'Inter-SemiBold',
   },
+  photoDateGroup: {
+    marginBottom: 20,
+  },
+  photoDateHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    marginBottom: 10,
+  },
+  photoDateLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 15,
+    color: '#1E293B',
+  },
   photoGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
+    gap: 4,
   },
   photoGridContent: {
     paddingBottom: 120,
+    paddingHorizontal: 2,
   },
   photoGridItem: {
     width: '23.5%',
     aspectRatio: 1,
-    marginBottom: 6,
   },
   photoGridImage: {
     width: '100%',

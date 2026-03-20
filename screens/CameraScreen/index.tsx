@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, SafeAreaView, Alert, Modal, TouchableOpacity, Image, Animated, Dimensions } from 'react-native';
-import { CameraView, CameraType, FlashMode, useCameraPermissions, CameraViewRef } from 'expo-camera';
+import { View, Text, SafeAreaView, Alert, Modal, TouchableOpacity, Image, Animated, Dimensions, LayoutChangeEvent } from 'react-native';
+import { CameraView, CameraType, FlashMode, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { StatusBar } from 'expo-status-bar';
 import { Zap } from 'lucide-react-native';
 import AudioRecordingModal, { AudioRecordingModalHandles } from '../../components/AudioRecordingModal';
@@ -12,13 +12,16 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 export default function CameraScreen({ onClose }: { onClose: () => void }) {
   const [permission, requestPermission] = useCameraPermissions();
+  const [microphonePermission, requestMicrophonePermission] = useMicrophonePermissions();
   const [showAudioModal, setShowAudioModal] = useState(true);
   const [audioModalReady, setAudioModalReady] = useState(false);
   const [facing, setFacing] = useState<CameraType>('back');
   const [flash, setFlash] = useState<FlashMode>('auto');
+  const [cameraMode, setCameraMode] = useState<'photo' | 'video' | 'scan'>('photo');
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isInitializing, setIsInitializing] = useState(true);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isRecordingVideo, setIsRecordingVideo] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [showOrganizedNotes, setShowOrganizedNotes] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(true);
@@ -29,6 +32,11 @@ export default function CameraScreen({ onClose }: { onClose: () => void }) {
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalPosition, setModalPosition] = useState(0);
+  const [previewCenterY, setPreviewCenterY] = useState<number | null>(null);
+  const [micState, setMicState] = useState<'muted' | 'listening' | 'processing' | 'saved'>('muted');
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [isMicProcessing, setIsMicProcessing] = useState(false);
+  const [audioLevel, setAudioLevel] = useState(0);
   const [organizedNotesData, setOrganizedNotesData] = useState<{
     content: string;
     photos: Array<{ uri: string; timestamp?: number; aiDescription?: string; photoId?: string }>;
@@ -47,6 +55,10 @@ export default function CameraScreen({ onClose }: { onClose: () => void }) {
   const cameraRef = useRef<any>(null);
   const audioRecordingModalRef = useRef<AudioRecordingModalHandles>(null);
   const flyAnim = useRef(new Animated.Value(0)).current;
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const savedResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const videoRecordingStartedAtRef = useRef<number | null>(null);
+  const pendingCloseAfterVideoStopRef = useRef(false);
   const [flyUri, setFlyUri] = useState<string | null>(null);
   const [flyStart, setFlyStart] = useState<{x:number;y:number;width:number;height:number}|null>(null);
   const [flyEnd, setFlyEnd] = useState<{x:number;y:number;width:number;height:number}|null>(null);
@@ -96,7 +108,174 @@ export default function CameraScreen({ onClose }: { onClose: () => void }) {
     initCamera();
   }, [permission?.granted]);
 
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+      }
+      if (savedResetTimerRef.current) {
+        clearTimeout(savedResetTimerRef.current);
+      }
+      if (cameraRef.current && isRecordingVideo) {
+        Promise.resolve(cameraRef.current.stopRecording?.()).catch((error: unknown) => {
+          console.error('Failed to stop recording during cleanup:', error);
+        });
+      }
+    };
+  }, [isRecordingVideo]);
+
+  const ensureCameraCanCapture = () => {
+    if (!permission?.granted) {
+      console.warn('Camera permission not granted');
+      Alert.alert('Permission Required', 'Camera permission is required to capture media.');
+      return false;
+    }
+
+    if (!cameraReady) {
+      console.warn('Camera not ready yet');
+      Alert.alert('Camera Not Ready', 'Please wait for the camera to initialize.');
+      return false;
+    }
+
+    if (!cameraRef.current) {
+      console.warn('Camera ref not available');
+      Alert.alert('Camera Error', 'Camera reference is not available. Please try again.');
+      return false;
+    }
+
+    return true;
+  };
+
+  const getReadyTrayRef = () => {
+    const modalRef = audioRecordingModalRef.current;
+
+    if (!audioModalReady || !modalRef) {
+      console.warn('Audio modal not ready yet, audioModalReady:', audioModalReady, 'modalRef:', !!modalRef);
+      Alert.alert('Please Wait', 'The capture tray is initializing. Please try again in a moment.');
+      return null;
+    }
+
+    return modalRef;
+  };
+
+  const addCapturedPhotoToTray = async (photoUri: string) => {
+    const modalRef = getReadyTrayRef();
+    if (!modalRef) {
+      return;
+    }
+
+    setFlyUri(photoUri);
+    const cameraBottomY = screenHeight * 0.81 - 80;
+    setFlyStart({
+      x: 0,
+      y: cameraBottomY,
+      width: 80,
+      height: 80,
+    });
+
+    const target = await modalRef.getTemporaryPhotoTarget();
+    if (target) setFlyEnd(target);
+
+    modalRef.addPhoto(photoUri);
+    modalRef.revealForUri(photoUri);
+
+    flyAnim.setValue(0);
+    Animated.timing(flyAnim, { toValue: 1, duration: 220, useNativeDriver: false }).start(() => {
+      setFlyUri(null);
+    });
+  };
+
+  const addCapturedVideoToTray = (videoUri: string, durationMs: number) => {
+    const modalRef = getReadyTrayRef();
+    if (!modalRef) {
+      return;
+    }
+
+    modalRef.addVideo(videoUri, durationMs);
+    modalRef.revealForUri(videoUri);
+  };
+
+  const stopVideoCapture = async () => {
+    if (!cameraRef.current || !isRecordingVideo) {
+      return;
+    }
+
+    setIsCapturing(true);
+
+    try {
+      await cameraRef.current.stopRecording?.();
+    } catch (error) {
+      console.error('Video stop error:', error);
+      Alert.alert('Video Error', 'Failed to stop recording. Please try again.');
+    } finally {
+      setIsCapturing(false);
+    }
+  };
+
+  const startVideoCapture = async () => {
+    if (isCapturing || isRecordingVideo) {
+      return;
+    }
+
+    if (!ensureCameraCanCapture()) {
+      return;
+    }
+
+    if (!getReadyTrayRef()) {
+      return;
+    }
+
+    if (!microphonePermission?.granted) {
+      const nextPermission = await requestMicrophonePermission();
+      if (!nextPermission.granted) {
+        Alert.alert('Microphone Required', 'Microphone permission is required to record video.');
+        return;
+      }
+    }
+
+    try {
+      setIsCapturing(true);
+      videoRecordingStartedAtRef.current = Date.now();
+      setIsRecordingVideo(true);
+      setIsCapturing(false);
+
+      const video = await cameraRef.current.recordAsync({
+        maxDuration: 300,
+      });
+
+      const durationMs = videoRecordingStartedAtRef.current
+        ? Math.max(0, Date.now() - videoRecordingStartedAtRef.current)
+        : 0;
+
+      if (video?.uri) {
+        addCapturedVideoToTray(video.uri, durationMs);
+      }
+    } catch (error) {
+      console.error('Video capture error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      Alert.alert('Video Error', `Failed to record video: ${errorMessage}. Please try again.`);
+    } finally {
+      setIsRecordingVideo(false);
+      setIsCapturing(false);
+      videoRecordingStartedAtRef.current = null;
+
+      if (pendingCloseAfterVideoStopRef.current) {
+        pendingCloseAfterVideoStopRef.current = false;
+        onClose();
+      }
+    }
+  };
+
   const handleCapture = async () => {
+    if (cameraMode === 'video') {
+      if (isRecordingVideo) {
+        await stopVideoCapture();
+      } else {
+        await startVideoCapture();
+      }
+      return;
+    }
+
     try {
       if (isCapturing) {
         console.warn('Capture already in progress');
@@ -108,37 +287,16 @@ export default function CameraScreen({ onClose }: { onClose: () => void }) {
       console.log('Camera ready state:', cameraReady);
       console.log('Permission granted:', permission?.granted);
 
-      if (!permission?.granted) {
-        console.warn('Camera permission not granted');
-        Alert.alert('Permission Required', 'Camera permission is required to take photos.');
+      if (!ensureCameraCanCapture()) {
         return;
       }
 
-      if (!cameraReady) {
-        console.warn('Camera not ready yet');
-        Alert.alert('Camera Not Ready', 'Please wait for the camera to initialize.');
-        return;
-      }
-
-      if (!cameraRef.current) {
-        console.warn('Camera ref not available');
-        Alert.alert('Camera Error', 'Camera reference is not available. Please try again.');
-        return;
-      }
-
-      // Capture modal ref early to prevent race conditions
-      const modalRef = audioRecordingModalRef.current;
-      
-      if (!audioModalReady || !modalRef) {
-        console.warn('Audio modal not ready yet, audioModalReady:', audioModalReady, 'modalRef:', !!modalRef);
-        Alert.alert('Please Wait', 'The photo tray is initializing. Please try again in a moment.');
+      if (!getReadyTrayRef()) {
         return;
       }
 
       setIsCapturing(true);
 
-      console.log('Taking picture...');
-      
       const photo = await cameraRef.current?.takePictureAsync({
         quality: 0.7,
         base64: false,
@@ -146,38 +304,9 @@ export default function CameraScreen({ onClose }: { onClose: () => void }) {
       });
 
       console.log('Photo captured:', photo?.uri);
-      
+
       if (photo && photo.uri) {
-        console.log('Photo has URI, adding to tray...');
-        
-        setFlyUri(photo.uri);
-        // Start animation from the very bottom left corner of camera preview
-        // Camera preview takes up ~81% of screen height (modal is 19%)
-        const cameraBottomY = screenHeight * 0.81 - 80; // Very bottom, just above modal
-        setFlyStart({ 
-          x: 0, // Very left edge
-          y: cameraBottomY, 
-          width: 80, 
-          height: 80 
-        });
-        
-        console.log('Getting photo target position...');
-        const target = await modalRef.getTemporaryPhotoTarget();
-        console.log('Target position:', target);
-        if (target) setFlyEnd(target);
-        
-        console.log('Adding photo to modal...');
-        modalRef.addPhoto(photo.uri);
-        
-        console.log('Revealing photo in modal...');
-        modalRef.revealForUri(photo.uri);
-        
-        console.log('Photo added successfully');
-        
-        flyAnim.setValue(0);
-        Animated.timing(flyAnim, { toValue: 1, duration: 220, useNativeDriver: false }).start(() => {
-          setFlyUri(null);
-        });
+        await addCapturedPhotoToTray(photo.uri);
       } else {
         console.warn('Photo captured but no URI returned');
         Alert.alert(
@@ -190,7 +319,7 @@ export default function CameraScreen({ onClose }: { onClose: () => void }) {
       console.error('Photo capture error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const errorStack = error instanceof Error ? error.stack : undefined;
-      
+
       console.error('Error details:', {
         message: errorMessage,
         stack: errorStack,
@@ -199,7 +328,7 @@ export default function CameraScreen({ onClose }: { onClose: () => void }) {
         isInitializing,
         isCapturing
       });
-      
+
       Alert.alert(
         'Capture Error',
         `Failed to take photo: ${errorMessage}. Please try again.`,
@@ -207,6 +336,65 @@ export default function CameraScreen({ onClose }: { onClose: () => void }) {
       );
     } finally {
       setIsCapturing(false);
+    }
+  };
+
+  const handleMicPress = async () => {
+    const modalRef = audioRecordingModalRef.current;
+
+    if (!audioModalReady || !modalRef) {
+      Alert.alert('Please Wait', 'The notes tray is initializing. Please try again in a moment.');
+      return;
+    }
+
+    if (micState === 'saved' || micState === 'processing' || isMicProcessing) {
+      return;
+    }
+
+    if (savedResetTimerRef.current) {
+      clearTimeout(savedResetTimerRef.current);
+      savedResetTimerRef.current = null;
+    }
+
+    if (micState === 'muted') {
+      const started = await modalRef.startCameraTextRecording();
+      if (!started) return;
+
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+      }
+
+      setRecordingSeconds(0);
+      setMicState('listening');
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds((current) => current + 1);
+      }, 1000);
+      return;
+    }
+
+    if (micState === 'listening') {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+
+      setMicState('processing');
+      setIsMicProcessing(true);
+      const saved = await modalRef.stopCameraTextRecording();
+      setIsMicProcessing(false);
+
+      if (!saved) {
+        setRecordingSeconds(0);
+        setMicState('muted');
+        return;
+      }
+
+      setMicState('saved');
+      savedResetTimerRef.current = setTimeout(() => {
+        setRecordingSeconds(0);
+        setMicState('muted');
+        savedResetTimerRef.current = null;
+      }, 1000);
     }
   };
 
@@ -254,6 +442,21 @@ export default function CameraScreen({ onClose }: { onClose: () => void }) {
   const handleCameraReady = () => {
     console.log('Camera is ready');
     setCameraReady(true);
+  };
+
+  const handlePreviewLayout = (event: LayoutChangeEvent) => {
+    const { y, height } = event.nativeEvent.layout;
+    setPreviewCenterY(y + height / 2);
+  };
+
+  const handleClosePress = async () => {
+    if (!isRecordingVideo) {
+      onClose();
+      return;
+    }
+
+    pendingCloseAfterVideoStopRef.current = true;
+    await stopVideoCapture();
   };
 
   const handleCameraError = (error: any) => {
@@ -325,14 +528,18 @@ export default function CameraScreen({ onClose }: { onClose: () => void }) {
         !isFullScreen && styles.cameraContainer4x3,
         isFullScreen && styles.cameraContainerFullScreen,
         showDebugBorders && styles.cameraContainerDebug
-      ]}>
+      ]}
+      onLayout={handlePreviewLayout}
+      >
         <CameraView
           style={[
             styles.camera,
             showDebugBorders && styles.cameraDebug
           ]}
+          mode={cameraMode === 'video' ? 'video' : 'picture'}
           facing={facing}
           flash={flash}
+          mute={false}
           zoom={Math.max(0, Math.min(1, zoomLevels[zoomLevel]?.value || 0))}
           ref={cameraRef}
           onCameraReady={handleCameraReady}
@@ -341,7 +548,7 @@ export default function CameraScreen({ onClose }: { onClose: () => void }) {
       </View>
       
       <CameraControls
-        onClose={onClose}
+        onClose={handleClosePress}
         isFullScreen={isFullScreen}
         toggleFullScreen={() => setIsFullScreen(!isFullScreen)}
         showDebugBorders={showDebugBorders}
@@ -357,7 +564,16 @@ export default function CameraScreen({ onClose }: { onClose: () => void }) {
         flash={flash}
         getFlashIcon={getFlashIcon}
         onSettingsPress={() => setShowSettingsMenu(true)}
+        cameraMode={cameraMode}
+        onCameraModeChange={setCameraMode}
+        isRecordingVideo={isRecordingVideo}
         modalPosition={modalPosition}
+        previewCenterY={previewCenterY}
+        micState={micState}
+        recordingSeconds={recordingSeconds}
+        onMicPress={handleMicPress}
+        micDisabled={isMicProcessing}
+        audioLevel={audioLevel}
       />
       
       {/* Fly-down thumbnail animation */}
@@ -402,6 +618,7 @@ export default function CameraScreen({ onClose }: { onClose: () => void }) {
           showTags={showTags}
           onModalStateChange={setIsModalOpen}
           onModalPositionChange={setModalPosition}
+          onMeteringUpdate={setAudioLevel}
         />
       </View>
       

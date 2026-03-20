@@ -311,3 +311,114 @@ Transcription: """${trimmed}"""`;
     return null;
   }
 }
+
+export interface SessionSummaryResult {
+  summary: string;
+  suggestions: Array<{
+    type: 'capture' | 'document' | 'checklist' | 'task';
+    label: string;
+  }>;
+}
+
+/**
+ * Summarize a capture session given photo descriptions and voice notes.
+ * Returns a short summary and actionable suggestions.
+ */
+export async function getSessionSummary(
+  photoDescriptions: string[],
+  voiceNotes: string[]
+): Promise<SessionSummaryResult | null> {
+  if (photoDescriptions.length === 0 && voiceNotes.length === 0) {
+    return null;
+  }
+
+  if (!GOOGLE_API_KEY || GOOGLE_API_KEY === 'your_gemini_api_key_here') {
+    console.warn('No Gemini API key configured for session summary');
+    return null;
+  }
+
+  try {
+    const photoPart = photoDescriptions.length > 0
+      ? `Photos captured:\n${photoDescriptions.map((d, i) => `${i + 1}. ${d}`).join('\n')}`
+      : 'No photos captured yet.';
+
+    const notesPart = voiceNotes.length > 0
+      ? `Voice notes:\n${voiceNotes.map((n, i) => `${i + 1}. ${n}`).join('\n')}`
+      : '';
+
+    const prompt = `You are an AI assistant for a construction site documentation app. A user has been capturing photos and voice notes on a job site. Summarize what they appear to be documenting, then suggest 2-4 next actions they could take.
+
+${photoPart}
+${notesPart}
+
+Respond ONLY in strict JSON (no markdown fences):
+{
+  "summary": string, // 1-2 sentences describing what they're documenting
+  "suggestions": [
+    {
+      "type": "capture" | "document" | "checklist" | "task",
+      "label": string // short action label, <=8 words
+    }
+  ]
+}
+
+"capture" = suggest something else to photograph.
+"document" = suggest generating a document (proposal, work order, report, etc).
+"checklist" = suggest creating a checklist or punch list.
+"task" = suggest creating a follow-up task.
+
+Keep suggestions practical and specific to what they've captured so far.`;
+
+    const requestBody = {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.3,
+        topK: 32,
+        topP: 1,
+        maxOutputTokens: 512,
+      },
+    };
+
+    const response = await fetch(GEMINI_TEXT_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({}));
+      console.error('Gemini session summary API Error:', JSON.stringify(errorBody, null, 2));
+      return null;
+    }
+
+    const data: GeminiResponse = await response.json();
+    const rawText = extractCandidateText(data);
+    if (!rawText) return null;
+
+    const parsed = parseJson<{
+      summary?: string;
+      suggestions?: Array<{
+        type?: string;
+        label?: string;
+      }>;
+    }>(rawText);
+
+    if (!parsed?.summary) return null;
+
+    const validTypes = new Set(['capture', 'document', 'checklist', 'task']);
+    const suggestions = (parsed.suggestions ?? [])
+      .filter(s => s.label && s.type && validTypes.has(s.type))
+      .map(s => ({
+        type: s.type as 'capture' | 'document' | 'checklist' | 'task',
+        label: s.label!,
+      }));
+
+    return {
+      summary: parsed.summary.trim(),
+      suggestions,
+    };
+  } catch (error) {
+    console.error('Error getting session summary:', error);
+    return null;
+  }
+}

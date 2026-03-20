@@ -2,10 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Image, Alert, useWindowDimensions } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Menu, Map, Search, Bell, Plus, Camera, ChevronRight, Sparkles, DollarSign, Trash2, Bot, WandSparkles, FileText, CheckSquare, Users, FolderOpen, BarChart3, Mic, Home, AudioLines, Image as ImageIcon, Trophy } from 'lucide-react-native';
+import { Menu, Map, Search, Bell, Plus, Camera, ChevronRight, ChevronDown, Sparkles, DollarSign, Trash2, Bot, WandSparkles, FileText, CheckSquare, Users, FolderOpen, BarChart3, Mic, Home, AudioLines, Image as ImageIcon, Trophy, MessageCircle, Tag } from 'lucide-react-native';
+import { BlurView } from 'expo-blur';
 import CamAIIcon from '../components/CamAIIcon';
 import WavelengthAnimation from '../components/WavelengthAnimation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import ChatScreen from './ChatScreen';
 import ProfileScreen from './ProfileScreen';
 import CameraScreen from './CameraScreen';
 import AudioRecordingModal, { AudioRecordingModalHandles } from '../components/AudioRecordingModal';
@@ -72,8 +74,6 @@ export default function HomeScreen() {
   const [showMyStuffScreen, setShowMyStuffScreen] = useState(false);
   const [disablePaymentButton, setDisablePaymentButton] = useState(false);
   const [showAddWidgetModal, setShowAddWidgetModal] = useState(false);
-  const [showSearchPage, setShowSearchPage] = useState(false);
-  const [showPaymentsScreen, setShowPaymentsScreen] = useState(false);
   const [showOrganizedNotes, setShowOrganizedNotes] = useState(false);
   const [showMapModal, setShowMapModal] = useState(false);
   const [showPortfolioScreen, setShowPortfolioScreen] = useState(false);
@@ -82,9 +82,11 @@ export default function HomeScreen() {
   const [showUserProfile, setShowUserProfile] = useState(false);
   const [showLearnThings, setShowLearnThings] = useState(false);
   const [hideProjectSection, setHideProjectSection] = useState(false);
+  const [hideWelcomeSection, setHideWelcomeSection] = useState(true);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showSalesRepSheet, setShowSalesRepSheet] = useState(false);
   const [hasAssignedRep, setHasAssignedRep] = useState(false); // Toggle to test assigned vs unassigned rep states
+  const [activeMainTab, setActiveMainTab] = useState<'home' | 'chat' | 'payments' | 'search'>('home');
 
 
   const [hasNewMyStuffItems, setHasNewMyStuffItems] = useState(true); // Badge indicator for My Stuff
@@ -206,7 +208,7 @@ export default function HomeScreen() {
   };
 
   const handleSearchPress = () => {
-    setShowSearchPage(true);
+    setActiveMainTab('search');
   };
 
   const handleMapPress = () => {
@@ -356,7 +358,7 @@ export default function HomeScreen() {
       case 'project-map': return handleMapPress;
       case 'to-dos': return () => console.log('To-Dos pressed');
       case 'documents': return () => console.log('Documents pressed');
-      case 'payments': return () => setShowPaymentsScreen(true);
+      case 'payments': return () => setActiveMainTab('payments');
       case 'users-groups': return () => console.log('Users & Groups pressed');
       case 'portfolio': return () => setShowPortfolioScreen(true);
       case 'onboarding': return () => setShowOnboarding(true);
@@ -519,6 +521,29 @@ export default function HomeScreen() {
     },
   ];
 
+  const photoFeedImages = [
+    require('../assets/images/activity-sarah.jpg'),
+    require('../assets/images/thumb-downtown-office.jpg'),
+    require('../assets/images/activity-mike.jpg'),
+    require('../assets/images/thumb-sunset-villa.jpg'),
+    require('../assets/images/activity-emily.jpg'),
+    require('../assets/images/thumb-modern-loft.jpg'),
+    require('../assets/images/activity-david.jpg'),
+    require('../assets/images/thumb-family-home.jpg'),
+    require('../assets/images/activity-lisa.jpg'),
+    require('../assets/images/thumb-warehouse.jpg'),
+    require('../assets/images/activity-james.jpg'),
+    require('../assets/images/thumb-beach-house.jpg'),
+    require('../assets/images/project-downtown-office.jpg'),
+    require('../assets/images/project-sunset-villa.jpg'),
+    require('../assets/images/project-modern-loft.jpg'),
+    require('../assets/images/project-family-home.jpg'),
+    require('../assets/images/project-warehouse.jpg'),
+    require('../assets/images/project-beach-house.jpg'),
+    require('../assets/images/hero-project.jpg'),
+    require('../assets/images/activity-sarah.jpg'),
+  ];
+
   const projectCategories: ProjectCategory[] = ['Nearby', 'Recent', 'Starred'];
   const [selectedProjectCategory, setSelectedProjectCategory] = useState<ProjectCategory>('Nearby');
 
@@ -611,10 +636,16 @@ export default function HomeScreen() {
     ],
   };
 
+  // Determine if tab bar should be visible (hide when full-screen modals are open)
+  const shouldShowTabBar = !showCamera && !showProjectScreen && !showProfileScreen && !showPortfolioScreen && !showOrganizedNotes && !showOnboarding && !showMyStuffScreen && !showMapModal && !showUserProfile && !showLearnThings && !showLeaderboard;
+
   return (
     <View style={styles.container}>
+      {/* Home tab content (header + scrollview) */}
+      {activeMainTab === 'home' && (
+        <>
       {/* Fixed Header */}
-      <TouchableOpacity 
+      <TouchableOpacity
         style={[styles.header, { paddingTop: Math.max(insets.top + 16, 32) }]}
         onPress={() => {}}
         onLongPress={() => {
@@ -679,6 +710,7 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Welcome Section */}
+        {!hideWelcomeSection && (
         <View style={styles.welcomeSection}>
           <View style={styles.welcomeHeader}>
             <Text style={styles.welcomeText}>Welcome, Alex</Text>
@@ -690,8 +722,10 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
         </View>
+        )}
 
         {/* Quick Access Grid - Dynamic Layout */}
+        {!hideWelcomeSection && (
         <View style={styles.quickAccessGrid}>
           {quickAccessCards
             .filter(card => card.visible)
@@ -753,6 +787,7 @@ export default function HomeScreen() {
               </View>
             ))}
         </View>
+        )}
         {/* Search Bar - Full Width (AI chat style) */}
         {!hideSearchBar && showHeaderIcons && (
           <TouchableOpacity style={styles.searchBar} onPress={handleSearchPress}>
@@ -794,7 +829,7 @@ export default function HomeScreen() {
                   key={`top-widget-${widget.id}-${index}`}
                   style={[styles.widgetCard, { width: widgetWidth }]}
                   onPress={() => {
-                    if (widget.id === 'payments') setShowPaymentsScreen(true);
+                    if (widget.id === 'payments') setActiveMainTab('payments');
                     if (widget.id === 'map') setShowMapModal(true);
                   }}
                   onLongPress={() => setAddedWidgets(prev => prev.filter((_, idx) => idx !== index))}
@@ -904,126 +939,54 @@ export default function HomeScreen() {
           </View>
         ))}
 
-        {/* Activity Section */}
-        {!hideActivityFeed && (
-          <View style={styles.activitySection}>
-            {!hideActivityTitle && (
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Photos</Text>
-                <TouchableOpacity 
-                  style={styles.seeAllButton}
-                  onPress={() => {
-                    // TODO: Navigate to all photos screen
-                    console.log('See All Photos pressed');
-                  }}
-                >
-                  <Text style={styles.seeAllButtonText}>See All</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.activityScroll}
-            >
-              {activityItems.map((item, index) => {
-                // Split name into first and last
-                const nameParts = item.label.split(' ');
-                const firstName = nameParts[0];
-                const lastName = nameParts.slice(1).join(' ');
-                
-                return (
-                  <View key={item.id} style={styles.activityItemContainer}>
-                    <TouchableOpacity style={styles.activityItem}>
-                      <View style={styles.activityImageContainer}>
-                        <Image 
-                          source={typeof item.imageUrl === 'string' ? { uri: item.imageUrl } : item.imageUrl}
-                          style={styles.activityImage}
-                        />
-                        {item.timeAgo && (
-                          <View style={styles.timeBadge}>
-                            <Text style={styles.timeBadgeText}>{item.timeAgo}</Text>
-                          </View>
-                        )}
-                      </View>
-                      <TouchableOpacity 
-                        style={styles.activityUserInfo}
-                        onPress={() => handleUserPress(item)}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.activityAvatar}>
-                          <Image 
-                            source={typeof item.avatarUrl === 'string' ? { uri: item.avatarUrl } : item.avatarUrl}
-                            style={styles.activityAvatarImage}
-                          />
-                        </View>
-                        <View style={styles.activityNameContainer}>
-                          <Text style={styles.activityFirstName} numberOfLines={1}>
-                            {firstName}
-                          </Text>
-                          <Text style={styles.activityLastName} numberOfLines={1}>
-                            {lastName}
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
-                    </TouchableOpacity>
-                  </View>
-                );
-              })}
-            </ScrollView>
-          </View>
-        )}
-
         {/* Projects Section */}
         {!hideProjectSection && (
         <View style={styles.projectsSection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Projects</Text>
-            <TouchableOpacity 
-              style={styles.seeAllButton}
+          {/* Project Categories */}
+          <View style={styles.categoryRow}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoryScroll}
+            >
+              {projectCategories.map((category) => (
+                <TouchableOpacity
+                  key={category}
+                  style={[
+                    styles.categoryButton,
+                    selectedProjectCategory === category && styles.categoryButtonActive
+                  ]}
+                  onPress={() => setSelectedProjectCategory(category)}
+                >
+                  <Text style={[
+                    styles.categoryText,
+                    selectedProjectCategory === category && styles.categoryTextActive
+                  ]}>
+                    {category}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <TouchableOpacity
+              style={styles.seeAllPill}
               onPress={() => {
                 // TODO: Navigate to all projects screen
                 console.log('See All Projects pressed');
               }}
             >
-              <Text style={styles.seeAllButtonText}>See All</Text>
+              <Text style={styles.seeAllPillText}>See All</Text>
             </TouchableOpacity>
           </View>
-          
-          {/* Project Categories */}
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoryScroll}
-          >
-            {projectCategories.map((category) => (
-              <TouchableOpacity
-                key={category}
-                style={[
-                  styles.categoryButton,
-                  selectedProjectCategory === category && styles.categoryButtonActive
-                ]}
-                onPress={() => setSelectedProjectCategory(category)}
-              >
-                <Text style={[
-                  styles.categoryText,
-                  selectedProjectCategory === category && styles.categoryTextActive
-                ]}>
-                  {category}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
 
           {/* Project Cards */}
-          <ScrollView 
-            horizontal 
+          <ScrollView
+            horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.projectScroll}
           >
             {projectsData[selectedProjectCategory].map((project) => (
-              <TouchableOpacity 
-                key={project.id} 
+              <TouchableOpacity
+                key={project.id}
                 style={[styles.projectCard, { width: projectCardWidth }]}
                 onPress={() => handleProjectPress(project.id)}
               >
@@ -1061,6 +1024,68 @@ export default function HomeScreen() {
         </View>
         )}
 
+        {/* Photo Feed Section */}
+        {!hideActivityFeed && (
+          <View style={styles.photoFeedSection}>
+            {!hideActivityTitle && (
+              <View style={styles.photoFeedHeader}>
+                <View style={styles.photoFeedHeaderRow}>
+                  {['Photos', 'Tasks', 'Docs'].map((tab) => (
+                    <TouchableOpacity key={tab} onPress={() => {}} activeOpacity={0.7}>
+                      <Text style={[
+                        styles.photoFeedTab,
+                        tab === 'Photos' && styles.photoFeedTabActive,
+                      ]}>
+                        {tab}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <View style={styles.photoFeedActionsRow}>
+                  <View style={styles.photoFeedFilters}>
+                    <TouchableOpacity style={styles.photoFeedIconBtn} activeOpacity={0.7}>
+                      <Users size={16} color="#64748B" />
+                      <ChevronDown size={12} color="#94A3B8" />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.photoFeedIconBtn} activeOpacity={0.7}>
+                      <Tag size={16} color="#64748B" />
+                      <ChevronDown size={12} color="#94A3B8" />
+                    </TouchableOpacity>
+                  </View>
+                  <TouchableOpacity style={styles.photoFeedAddBtn} activeOpacity={0.7}>
+                    <Plus size={14} color="#1E293B" />
+                    <Text style={styles.photoFeedAddText}>Add</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+            <View style={styles.photoFeedGrid}>
+              {(() => {
+                const gap = 4;
+                const padding = 20;
+                const cols = 4;
+                const itemSize = Math.floor((screenWidth - padding * 2 - gap * (cols - 1)) / cols);
+                return photoFeedImages.map((img, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    activeOpacity={0.8}
+                    style={{
+                      width: itemSize,
+                      height: itemSize,
+                      borderRadius: 4,
+                      overflow: 'hidden',
+                      marginRight: (index + 1) % cols === 0 ? 0 : gap,
+                      marginBottom: gap,
+                    }}
+                  >
+                    <Image source={img} style={styles.photoFeedImage} />
+                  </TouchableOpacity>
+                ));
+              })()}
+            </View>
+          </View>
+        )}
+
         {/* My Stuff Section (bottom) - shown only when widgets are at bottom */}
         {showMyStuffWidgets && !showWidgetsAtTop && (condensedMyStuff ? (
           !showWidgetsAtTop ? (
@@ -1095,7 +1120,7 @@ export default function HomeScreen() {
                   key={`widget-${widget.id}-${index}`}
                   style={[styles.widgetCard, { width: widgetWidth }]}
                   onPress={() => {
-                    if (widget.id === 'payments') setShowPaymentsScreen(true);
+                    if (widget.id === 'payments') setActiveMainTab('payments');
                     if (widget.id === 'map') setShowMapModal(true);
                   }}
                   onLongPress={() => setAddedWidgets(prev => prev.filter((_, idx) => idx !== index))}
@@ -1251,103 +1276,61 @@ export default function HomeScreen() {
           ) : null
         ))}
 
-        {/* Extra padding for FAB */}
+        {/* Extra padding for tab bar */}
         <View style={styles.fabPadding} />
       </ScrollView>
+        </>
+      )}
 
-
-
-      {/* Bottom Navigation Bar */}
-      {!useFloatingActionBar && (
-        <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-        <View style={styles.bottomNavRow}>
-          <TouchableOpacity style={styles.navItem} onPress={() => {}}>
-            <Home size={24} color="#64748B" />
-            <Text style={styles.navText}>Home</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.navItem} onPress={handleMapPress}>
-            <Map size={24} color="#64748B" />
-            <Text style={styles.navText}>Map</Text>
-          </TouchableOpacity>
-
-          <View style={styles.centerSlot}>
-            <TouchableOpacity onPress={handleCameraPress}>
-              <View style={styles.cameraContainer}>
-                <Camera size={28} color="#FFFFFF" />
-              </View>
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity style={styles.navItem} onPress={handleNotificationsPress}>
-            <Bell size={24} color="#64748B" />
-            <Text style={styles.navText}>Inbox</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.navItem} onPress={() => {
-            setShowMyStuffScreen(true);
-            setHasNewMyStuffItems(false);
-          }}>
-            <FolderOpen size={24} color="#64748B" />
-            <Text style={styles.navText}>My Stuff</Text>
-          </TouchableOpacity>
-        </View>
+      {/* Chat tab content */}
+      {activeMainTab === 'chat' && (
+        <View style={{ flex: 1 }}>
+          <ChatScreen onClose={() => setActiveMainTab('home')} />
         </View>
       )}
 
-      {/* Floating Action Bar - From ProjectDetailScreen */}
-      {useFloatingActionBar && !showSalesRepSheet && (
-        <View style={[styles.altActionBar, { bottom: Math.max(insets.bottom, 18) }]}>
-          <View style={styles.altRow}>
-            {/* Search - icon in gray circle, black icon */}
-            <TouchableOpacity 
-              onPress={handleSearchPress} 
-              style={[styles.altCircleButton, { 
-                position: 'absolute',
-                left: 14,
-                top: '50%',
-                transform: [{ translateY: -circleSize / 2 }],
-                width: circleSize, 
-                height: circleSize, 
-                borderRadius: circleSize / 2 
-              }]}
-            >
-              <Search size={iconSize} color="#000000" />
-            </TouchableOpacity>
+      {/* Payments tab content */}
+      {activeMainTab === 'payments' && (
+        <View style={{ flex: 1 }}>
+          <PaymentsScreen onClose={() => setActiveMainTab('home')} />
+        </View>
+      )}
 
-            {/* Camera (black container, white icon, wider) - perfectly centered */}
-            <TouchableOpacity 
-              onPress={handleCameraPress} 
-              style={[styles.altCircleButton, { 
-                position: 'absolute',
-                left: '50%',
-                top: '50%',
-                transform: [{ translateX: -(circleSize * 1.8) / 2 }, { translateY: -circleSize / 2 }],
-                width: circleSize * 1.8, 
-                height: circleSize, 
-                borderRadius: circleSize / 2, 
-                backgroundColor: '#000000' 
-              }]}
-            >
-              <Camera size={iconSize} color="#FFFFFF" />
-            </TouchableOpacity>
+      {/* Search tab content */}
+      {activeMainTab === 'search' && (
+        <View style={{ flex: 1 }}>
+          <SearchPageScreen onClose={() => setActiveMainTab('home')} />
+        </View>
+      )}
 
-            {/* Magic AI - purple icon in gray circle */}
-            <TouchableOpacity 
-              onPress={handleMagicAIPress} 
-              style={[styles.altCircleButton, { 
-                position: 'absolute',
-                right: 14,
-                top: '50%',
-                transform: [{ translateY: -circleSize / 2 }],
-                width: circleSize, 
-                height: circleSize, 
-                borderRadius: circleSize / 2 
-              }]}
-            >
-              <CamAIIcon size={iconSize} glyphColor="#7C3AED" />
-            </TouchableOpacity>
-          </View>
+      {/* Bottom Tab Bar */}
+      {shouldShowTabBar && (
+        <View style={[styles.bottomTabBar, { paddingBottom: insets.bottom + 12 }]}>
+          <TouchableOpacity style={styles.tabBarItem} onPress={() => setActiveMainTab('home')}>
+            <Home size={24} color={activeMainTab === 'home' ? '#1C1C1E' : '#8E8E93'} />
+            {activeMainTab === 'home' && <View style={styles.tabBarDot} />}
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.tabBarItem} onPress={() => setActiveMainTab('chat')}>
+            <MessageCircle size={24} color={activeMainTab === 'chat' ? '#1C1C1E' : '#8E8E93'} />
+            {activeMainTab === 'chat' && <View style={styles.tabBarDot} />}
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.tabBarCameraItem} onPress={handleCameraPress} activeOpacity={0.7}>
+            <View style={styles.tabBarCameraButton}>
+              <Camera size={24} color="#FFFFFF" />
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.tabBarItem} onPress={() => setActiveMainTab('payments')}>
+            <DollarSign size={24} color={activeMainTab === 'payments' ? '#1C1C1E' : '#8E8E93'} />
+            {activeMainTab === 'payments' && <View style={styles.tabBarDot} />}
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.tabBarItem} onPress={() => setActiveMainTab('search')}>
+            <Search size={24} color={activeMainTab === 'search' ? '#1C1C1E' : '#8E8E93'} />
+            {activeMainTab === 'search' && <View style={styles.tabBarDot} />}
+          </TouchableOpacity>
         </View>
       )}
 
@@ -1381,8 +1364,8 @@ export default function HomeScreen() {
           onToggleShowHeaderIcons={setShowHeaderIcons}
           hideProjectSection={hideProjectSection}
           onToggleHideProjectSection={setHideProjectSection}
-          // useFloatingActionBar={useFloatingActionBar}
-          // onToggleUseFloatingActionBar={setUseFloatingActionBar}
+          hideWelcomeSection={hideWelcomeSection}
+          onToggleHideWelcomeSection={setHideWelcomeSection}
         />
       </Modal>
 
@@ -1436,23 +1419,6 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      <Modal
-        visible={showSearchPage}
-        animationType="slide"
-        presentationStyle="fullScreen"
-        statusBarTranslucent={true}
-      >
-        <SearchPageScreen onClose={() => setShowSearchPage(false)} />
-      </Modal>
-
-      <Modal
-        visible={showPaymentsScreen}
-        animationType="slide"
-        presentationStyle="fullScreen"
-        statusBarTranslucent={true}
-      >
-        <PaymentsScreen onClose={() => setShowPaymentsScreen(false)} />
-      </Modal>
 
       <Modal
         visible={showPortfolioScreen}
@@ -1602,7 +1568,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 100, // Space for bottom navigation bar
+    paddingBottom: 20, // Space for bottom tab bar (tab bar is outside ScrollView)
   },
   welcomeSection: {
     paddingHorizontal: 20,
@@ -1872,6 +1838,69 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     paddingBottom: 16,
   },
+  photoFeedSection: {
+    paddingTop: 24,
+  },
+  photoFeedHeader: {
+    paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+  photoFeedHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 20,
+    marginBottom: 12,
+  },
+  photoFeedTab: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 24,
+    color: '#CBD5E1',
+  },
+  photoFeedTabActive: {
+    color: '#1E293B',
+  },
+  photoFeedActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  photoFeedFilters: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  photoFeedIconBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+  photoFeedAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+  },
+  photoFeedAddText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 13,
+    color: '#1E293B',
+  },
+  photoFeedGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 20,
+  },
+  photoFeedImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
   sectionTitle: {
     fontFamily: 'Inter-SemiBold',
     fontSize: 24,
@@ -1986,10 +2015,27 @@ const styles = StyleSheet.create({
     paddingTop: 36,
     paddingBottom: 24,
   },
+  categoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingRight: 20,
+  },
   categoryScroll: {
     paddingLeft: 20,
-    paddingRight: 20,
-    marginBottom: 16,
+    flex: 1,
+  },
+  seeAllPill: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    marginLeft: 4,
+  },
+  seeAllPillText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 14,
+    color: '#3B82F6',
   },
   categoryButton: {
     paddingHorizontal: 16,
@@ -2479,46 +2525,101 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     lineHeight: 14,
   },
-  bottomNav: {
+  actionBarWrapper: {
     position: 'absolute',
-    bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    alignItems: 'center',
   },
-  bottomNavRow: {
+  actionBarBlur: {
+    borderRadius: 32,
+    overflow: 'hidden',
+    borderWidth: 0.5,
+    borderColor: 'rgba(0, 0, 0, 0.12)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  actionBarInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    gap: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.72)',
   },
-  navItem: {
+  actionBarItem: {
+    width: 56,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 4,
-    gap: 2,
-    width: 60,
+    borderRadius: 22,
   },
-  navText: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 12,
-    color: '#64748B',
+  actionBarCameraItem: {
+    marginHorizontal: 4,
+  },
+  actionBarCameraButton: {
+    width: 56,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#007AFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomTabBar: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-around',
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 0,
+    paddingTop: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  tabBarItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    gap: 6,
+  },
+  tabBarDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#1C1C1E',
+  },
+  tabBarLabel: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 10,
+    color: '#8E8E93',
     marginTop: 2,
   },
-  centerSlot: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 60,
+  tabBarLabelActive: {
+    color: '#1C1C1E',
   },
-  cameraContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#000000',
+  tabBarCameraItem: {
     alignItems: 'center',
     justifyContent: 'center',
+    flex: 1,
+    marginTop: -12,
+    gap: 2,
+  },
+  tabBarCameraButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#007AFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
 }); 

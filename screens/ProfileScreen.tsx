@@ -31,6 +31,8 @@ interface ProfileScreenProps {
   onToggleShowHeaderIcons?: (value: boolean) => void;
   hideProjectSection?: boolean;
   onToggleHideProjectSection?: (value: boolean) => void;
+  hideWelcomeSection?: boolean;
+  onToggleHideWelcomeSection?: (value: boolean) => void;
 }
 
 export default function ProfileScreen({ 
@@ -58,7 +60,9 @@ export default function ProfileScreen({
   showHeaderIcons = true,
   onToggleShowHeaderIcons = () => {},
   hideProjectSection = false,
-  onToggleHideProjectSection = () => {}
+  onToggleHideProjectSection = () => {},
+  hideWelcomeSection = true,
+  onToggleHideWelcomeSection = () => {}
 }: ProfileScreenProps) {
   const insets = useSafeAreaInsets();
   const [showSettingsScreen, setShowSettingsScreen] = useState(false);
@@ -109,113 +113,109 @@ export default function ProfileScreen({
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Profile Section */}
         <View style={styles.profileSection}>
-          <View style={styles.profileImageContainer}>
+          <View style={styles.profileRow}>
             <Image 
               source={{ uri: 'https://randomuser.me/api/portraits/women/68.jpg' }}
               style={styles.profileImage}
             />
+            <View style={styles.profileInfo}>
+              <Text style={styles.userName}>Emily Chen</Text>
+              <Text style={styles.userCompany}>CompanyCam</Text>
+            </View>
           </View>
-          <Text style={styles.userName}>Emily Chen</Text>
-          <Text style={styles.userCompany}>CompanyCam</Text>
-        </View>
-
-        {/* Action Buttons */}
-        <View style={styles.actionButtonsContainer}>
-          <TouchableOpacity style={styles.actionButton} onPress={() => console.log('Edit Profile')}>
-            <View style={styles.actionButtonIcon}>
-              <Edit size={20} color="#1E293B" />
-            </View>
-            <Text style={styles.actionButtonText}>Edit Profile</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.actionButton} onPress={() => console.log('Switch Account')}>
-            <View style={styles.actionButtonIcon}>
-              <RefreshCw size={20} color="#1E293B" />
-            </View>
-            <Text style={styles.actionButtonText}>Switch Account</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.actionButton} onPress={() => handleMenuPress('Settings')}>
-            <View style={styles.actionButtonIcon}>
-              <Settings size={20} color="#1E293B" />
-            </View>
-            <Text style={styles.actionButtonText}>Settings</Text>
-          </TouchableOpacity>
+          <View style={styles.actionButtonsContainer}>
+            <TouchableOpacity style={styles.actionButton} onPress={() => console.log('Edit Profile')}>
+              <Edit size={16} color="#1E293B" />
+              <Text style={styles.actionButtonText}>Edit Profile</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionButton} onPress={() => console.log('Switch Account')}>
+              <RefreshCw size={16} color="#1E293B" />
+              <Text style={styles.actionButtonText}>Switch</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionButton} onPress={() => handleMenuPress('Settings')}>
+              <Settings size={16} color="#1E293B" />
+              <Text style={styles.actionButtonText}>Settings</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Prototype Options Section */}
-        <View style={styles.prototypeSection}>
+        <View style={styles.section}>
           <Text style={styles.sectionHeader}>Prototype Options</Text>
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => handleMenuPress('Prototype Options')}
-          >
-            <View style={styles.menuItemLeft}>
-              <View style={styles.menuIconContainer}>
-                <Wrench size={20} color="#64748B" />
+          <View style={styles.sectionCard}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => handleMenuPress('Prototype Options')}
+            >
+              <View style={styles.menuItemLeft}>
+                <Wrench size={18} color="#64748B" />
+                <Text style={styles.menuItemText}>Prototype Options</Text>
               </View>
-              <Text style={styles.menuItemText}>Prototype Options</Text>
-            </View>
-            <ChevronRight size={20} color="#94A3B8" />
-          </TouchableOpacity>
+              <ChevronRight size={18} color="#94A3B8" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Company Menu Items */}
-        <View style={styles.companySection}>
+        <View style={styles.section}>
           <Text style={styles.sectionHeader}>Anderson Construction Co.</Text>
-          {menuItems.map((item) => {
-            const IconComponent = item.icon;
-            return (
-              <TouchableOpacity
-                key={item.id}
-                style={styles.menuItem}
-                onPress={() => handleMenuPress(item.label)}
-              >
-                <View style={styles.menuItemLeft}>
-                  <View style={styles.menuIconContainer}>
-                    <IconComponent size={20} color="#64748B" />
-                  </View>
-                  <Text style={styles.menuItemText}>{item.label}</Text>
-                </View>
-                <ChevronRight size={20} color="#94A3B8" />
-              </TouchableOpacity>
-            );
-          })}
+          <View style={styles.sectionCard}>
+            {menuItems.map((item, index) => {
+              const IconComponent = item.icon;
+              return (
+                <React.Fragment key={item.id}>
+                  {index > 0 && <View style={styles.separator} />}
+                  <TouchableOpacity
+                    style={styles.menuItem}
+                    onPress={() => handleMenuPress(item.label)}
+                  >
+                    <View style={styles.menuItemLeft}>
+                      <IconComponent size={18} color="#64748B" />
+                      <Text style={styles.menuItemText}>{item.label}</Text>
+                    </View>
+                    <ChevronRight size={18} color="#94A3B8" />
+                  </TouchableOpacity>
+                </React.Fragment>
+              );
+            })}
+          </View>
         </View>
 
         {/* Settings Section */}
-        <View style={styles.settingsSection}>
+        <View style={styles.section}>
           <Text style={styles.sectionHeader}>Settings</Text>
-          {settingsItems.map((item) => {
-            const IconComponent = item.icon;
-            return (
-              <TouchableOpacity
-                key={item.id}
-                style={styles.menuItem}
-                onPress={() => handleMenuPress(item.label)}
-              >
-                <View style={styles.menuItemLeft}>
-                  <View style={styles.menuIconContainer}>
-                    <IconComponent size={20} color="#64748B" />
-                  </View>
-                  <Text style={styles.menuItemText}>{item.label}</Text>
-                </View>
-                <ChevronRight size={20} color="#94A3B8" />
-              </TouchableOpacity>
-            );
-          })}
+          <View style={styles.sectionCard}>
+            {settingsItems.map((item, index) => {
+              const IconComponent = item.icon;
+              return (
+                <React.Fragment key={item.id}>
+                  {index > 0 && <View style={styles.separator} />}
+                  <TouchableOpacity
+                    style={styles.menuItem}
+                    onPress={() => handleMenuPress(item.label)}
+                  >
+                    <View style={styles.menuItemLeft}>
+                      <IconComponent size={18} color="#64748B" />
+                      <Text style={styles.menuItemText}>{item.label}</Text>
+                    </View>
+                    <ChevronRight size={18} color="#94A3B8" />
+                  </TouchableOpacity>
+                </React.Fragment>
+              );
+            })}
+          </View>
         </View>
 
         {/* Sign Out Section */}
-        <View style={styles.signOutSection}>
-          <TouchableOpacity style={styles.menuItem} onPress={() => handleMenuPress('Sign Out')}>
-            <View style={styles.menuItemLeft}>
-              <View style={styles.menuIconContainer}>
-                <LogOut size={20} color="#EF4444" />
+        <View style={styles.section}>
+          <View style={styles.sectionCard}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => handleMenuPress('Sign Out')}>
+              <View style={styles.menuItemLeft}>
+                <LogOut size={18} color="#EF4444" />
+                <Text style={[styles.menuItemText, { color: '#EF4444' }]}>Sign Out</Text>
               </View>
-              <Text style={[styles.menuItemText, { color: '#EF4444' }]}>Sign Out</Text>
-            </View>
-          </TouchableOpacity>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
 
@@ -260,6 +260,8 @@ export default function ProfileScreen({
           onToggleShowHeaderIcons={onToggleShowHeaderIcons}
           hideProjectSection={hideProjectSection}
           onToggleHideProjectSection={onToggleHideProjectSection}
+          hideWelcomeSection={hideWelcomeSection}
+          onToggleHideWelcomeSection={onToggleHideWelcomeSection}
         />
       </Modal>
     </View>
@@ -269,28 +271,28 @@ export default function ProfileScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F1F5F9',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',
     paddingHorizontal: 20,
-    paddingBottom: 12,
-    backgroundColor: '#F8FAFC',
+    paddingBottom: 8,
+    backgroundColor: '#F1F5F9',
   },
   scrollView: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F1F5F9',
   },
   scrollContent: {
-    paddingTop: 20,
+    paddingTop: 4,
     paddingBottom: 40,
   },
   closeButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -303,131 +305,92 @@ const styles = StyleSheet.create({
     width: 44,
   },
   profileSection: {
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-    paddingTop: 20,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
   },
-  profileImageContainer: {
-    marginBottom: 20,
+  profileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   profileImage: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    marginRight: 14,
+  },
+  profileInfo: {
+    flex: 1,
   },
   userName: {
     fontFamily: 'Inter-Bold',
-    fontSize: 28,
+    fontSize: 20,
     color: '#1E293B',
-    marginBottom: 4,
-  },
-  userRole: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 16,
-    color: '#64748B',
     marginBottom: 2,
   },
   userCompany: {
     fontFamily: 'Inter-Regular',
-    fontSize: 16,
+    fontSize: 14,
     color: '#64748B',
   },
   actionButtonsContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    gap: 12,
-    marginBottom: 32,
+    gap: 8,
   },
   actionButton: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 12,
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  actionButtonIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F8FAFC',
     justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    gap: 6,
   },
   actionButtonText: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: 'Inter-Medium',
     fontSize: 13,
     color: '#1E293B',
-    textAlign: 'center',
   },
-  settingsSection: {
-    paddingHorizontal: 20,
-    marginBottom: 24,
+  section: {
+    paddingHorizontal: 16,
+    marginBottom: 16,
   },
-  companySection: {
-    paddingHorizontal: 20,
-    marginBottom: 24,
-  },
-  prototypeSection: {
-    paddingHorizontal: 20,
-    marginBottom: 24,
+  sectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    overflow: 'hidden',
   },
   sectionHeader: {
     fontFamily: 'Inter-SemiBold',
-    fontSize: 13,
+    fontSize: 12,
     color: '#94A3B8',
-    marginBottom: 8,
+    marginBottom: 6,
     paddingHorizontal: 4,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  signOutSection: {
-    paddingHorizontal: 20,
-    marginTop: 8,
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#E2E8F0',
+    marginLeft: 44,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
   },
   menuItemLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  menuIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
+    gap: 12,
   },
   menuItemText: {
     fontFamily: 'Inter-Medium',
-    fontSize: 16,
+    fontSize: 15,
     color: '#1E293B',
   },
 }); 

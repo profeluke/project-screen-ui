@@ -29,6 +29,8 @@ interface PrototypeOptionsScreenProps {
   onToggleShowHeaderIcons?: (value: boolean) => void;
   hideProjectSection?: boolean;
   onToggleHideProjectSection?: (value: boolean) => void;
+  hideWelcomeSection?: boolean;
+  onToggleHideWelcomeSection?: (value: boolean) => void;
 }
 
 export default function PrototypeOptionsScreen({ 
@@ -56,7 +58,9 @@ export default function PrototypeOptionsScreen({
   showHeaderIcons = true,
   onToggleShowHeaderIcons = () => {},
   hideProjectSection = false,
-  onToggleHideProjectSection = () => {}
+  onToggleHideProjectSection = () => {},
+  hideWelcomeSection = true,
+  onToggleHideWelcomeSection = () => {}
 }: PrototypeOptionsScreenProps) {
   const insets = useSafeAreaInsets();
 
@@ -265,6 +269,22 @@ export default function PrototypeOptionsScreen({
               onValueChange={onToggleHideProjectSection}
               trackColor={{ false: '#E2E8F0', true: '#3B82F6' }}
               thumbColor={hideProjectSection ? '#FFFFFF' : '#FFFFFF'}
+              ios_backgroundColor="#E2E8F0"
+            />
+          </View>
+
+          <View style={styles.optionItem}>
+            <View style={styles.optionLeft}>
+              <Text style={styles.optionTitle}>Hide Welcome Section</Text>
+              <Text style={styles.optionDescription}>
+                Hide the "Welcome, Alex" header, Edit button, and quick access widget cards at the top of the home screen
+              </Text>
+            </View>
+            <Switch
+              value={hideWelcomeSection}
+              onValueChange={onToggleHideWelcomeSection}
+              trackColor={{ false: '#E2E8F0', true: '#3B82F6' }}
+              thumbColor={hideWelcomeSection ? '#FFFFFF' : '#FFFFFF'}
               ios_backgroundColor="#E2E8F0"
             />
           </View>

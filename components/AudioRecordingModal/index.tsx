@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import Animated, { Extrapolate, interpolate, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
 import BottomSheet, { 
   BottomSheetView, 
   BottomSheetBackdrop, 
@@ -38,6 +39,7 @@ import {
   ChevronDown,
   MessageCircle,
   WandSparkles,
+  Video,
   Share,
   Trash2,
   MoreHorizontal,
@@ -46,8 +48,8 @@ import {
 import { useAudioRecorder, AudioModule, RecordingPresets } from 'expo-audio';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { transcribeWithWhisper } from '../../utils/whisper';
-import { getGeminiVision, analyzeSpeechIntent } from '../../utils/gemini';
-import type { GeminiVisionResult, SpeechIntentSuggestion } from '../../utils/gemini';
+import { getGeminiVision, analyzeSpeechIntent, getSessionSummary } from '../../utils/gemini';
+import type { GeminiVisionResult, SpeechIntentSuggestion, SessionSummaryResult } from '../../utils/gemini';
 import { saveTask } from '../../utils/taskStorage';
 import * as FileSystem from 'expo-file-system/legacy';
 import WavelengthAnimation from '../WavelengthAnimation';
@@ -59,10 +61,11 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 interface Entry {
   id: string;
-  type: 'audio' | 'image' | 'text' | 'photoText';
+  type: 'audio' | 'image' | 'text' | 'photoText' | 'video';
   content: string;
   uri?: string;
   timestamp: Date;
+  durationMs?: number;
   isAnalyzing?: boolean;
   aiDescription?: string; // AI description for photos (also set on photoText)
   photoContext?: string; // URI of the photo this entry is associated with
@@ -81,6 +84,7 @@ interface Entry {
 type TimelineRow =
   | { kind: 'text'; time: number; entry: Entry }
   | { kind: 'photoText'; time: number; entry: Entry }
+  | { kind: 'video'; time: number; entry: Entry }
   | { kind: 'image'; time: number; entry: Entry };
 
 const formatDocumentType = (docType?: string) => {
@@ -111,6 +115,32 @@ const parseDocumentHypothesis = (hypothesis?: GeminiVisionResult['documentHypoth
   };
 };
 
+const getBriefSuggestionLabel = (label: string) => {
+  const normalized = label
+    .trim()
+    .replace(/[.]+$/, '')
+    .replace(/^(please\s+)/i, '')
+    .replace(/^(create|generate|make)\s+(a|an|the)\s+/i, '')
+    .replace(/^(schedule|plan|set up)\s+(a|an|the)\s+/i, '')
+    .replace(/^(photograph|capture|take)\s+(a|an|the)\s+/i, '')
+    .replace(/\b(entire|full)\b\s*/gi, '')
+    .replace(/\bworkspace setup\b/gi, 'workspace')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!normalized) {
+    return label;
+  }
+
+  if (normalized.length <= 24) {
+    return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  }
+
+  const compact = normalized.split(' ').slice(0, 3).join(' ');
+  const shortened = compact.length > 22 ? `${compact.slice(0, 22).trim()}...` : compact;
+  return shortened.charAt(0).toUpperCase() + shortened.slice(1);
+};
+
 interface AudioRecordingModalProps {
   visible: boolean;
   onClose: () => void;
@@ -130,14 +160,18 @@ interface AudioRecordingModalProps {
   showTags?: boolean;
   onModalStateChange?: (isOpen: boolean) => void;
   onModalPositionChange?: (position: number) => void;
+  onMeteringUpdate?: (level: number) => void;
 }
 
 export interface AudioRecordingModalHandles {
   openCamera: () => void;
   addPhoto: (photoUri: string) => void;
+  addVideo: (videoUri: string, durationMs?: number) => void;
   getTopEntryTarget: () => Promise<{ x: number; y: number; width: number; height: number } | null>;
   getTemporaryPhotoTarget: () => Promise<{ x: number; y: number; width: number; height: number } | null>;
   revealForUri: (uri: string) => void;
+  startCameraTextRecording: () => Promise<boolean>;
+  stopCameraTextRecording: () => Promise<boolean>;
 }
 
 const AudioRecordingModal = forwardRef((props: AudioRecordingModalProps, ref: React.Ref<AudioRecordingModalHandles>) => {
@@ -159,7 +193,8 @@ const AudioRecordingModal = forwardRef((props: AudioRecordingModalProps, ref: Re
     showProjectTitle = false,
     showTags = false,
     onModalStateChange,
-    onModalPositionChange
+    onModalPositionChange,
+    onMeteringUpdate,
   } = props;
   const insets = useSafeAreaInsets();
   
@@ -172,6 +207,7 @@ const AudioRecordingModal = forwardRef((props: AudioRecordingModalProps, ref: Re
   const [isGlobalRecording, setIsGlobalRecording] = useState(false); // Track if it's a global recording
   const [isInputFieldRecording, setIsInputFieldRecording] = useState(false); // Track if recording from input field
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set()); // Track expanded AI descriptions
+  const [expandedTextEntries, setExpandedTextEntries] = useState<Set<string>>(new Set()); // Track expanded text transcriptions
   const [temporaryPhoto, setTemporaryPhoto] = useState<string | null>(null); // Photo shown next to input temporarily
   const [photoNotes, setPhotoNotes] = useState<{[key: string]: string}>({}); // Track notes for each photo by ID
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null); // Track which entry is being edited
@@ -185,12 +221,18 @@ const AudioRecordingModal = forwardRef((props: AudioRecordingModalProps, ref: Re
   const [processingPhotoUri, setProcessingPhotoUri] = useState<string | null>(null); // Track which photo is being processed
   const [expandedPhotoUri, setExpandedPhotoUri] = useState<string | null>(null); // Track which photo has expanded speak button
   const expandedPhotoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [activeTab, setActiveTab] = useState<'timeline' | 'photos' | 'notes'>('timeline');
+  const [activeTab, setActiveTab] = useState<'notes' | 'checklists'>('notes');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedCreateType, setSelectedCreateType] = useState<string>('');
+  const [aiAssistantPrompt, setAiAssistantPrompt] = useState('');
   
   // Multi-select output types for empty state preview (AI Notes is always selected)
   const [selectedOutputTypes, setSelectedOutputTypes] = useState<Set<string>>(new Set(['AI Notes']));
+
+  // AI assistant session summary
+  const [sessionSummary, setSessionSummary] = useState<SessionSummaryResult | null>(null);
+  const [sessionSummaryLoading, setSessionSummaryLoading] = useState(false);
+  const sessionSummaryRequestId = useRef(0);
   
   // Output type options for the horizontal list
   const OUTPUT_TYPE_OPTIONS = [
@@ -231,6 +273,8 @@ const AudioRecordingModal = forwardRef((props: AudioRecordingModalProps, ref: Re
   const revealUriRef = useRef<string | null>(null);
   const revealOpacity = useRef(new RNAnimated.Value(0)).current;
   const revealTranslate = useRef(new RNAnimated.Value(6)).current;
+  const listeningShimmerTranslate = useRef(new RNAnimated.Value(-120)).current;
+  const listeningShimmerLoopRef = useRef<RNAnimated.CompositeAnimation | null>(null);
   const recordingStartTime = useRef<number | null>(null);
   const temporaryPhotoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const generalNotesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -240,6 +284,35 @@ const AudioRecordingModal = forwardRef((props: AudioRecordingModalProps, ref: Re
   const temporaryPhotoEntry = useRef<Entry | null>(null); // Store the current temporary photo's entry
 
   const animatedIndex = useSharedValue(isInCameraContext ? 0 : initialSnapIndex);
+
+  // Poll recorder metering and relay to parent
+  const meteringIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (isRecording && onMeteringUpdate) {
+      meteringIntervalRef.current = setInterval(() => {
+        try {
+          const status = recorder.getStatus();
+          // metering is in dB, typically -160 (silence) to 0 (max).
+          // Normalize to 0..1 range
+          const raw = status.metering ?? -160;
+          const normalized = Math.max(0, Math.min(1, (raw + 50) / 50));
+          onMeteringUpdate(normalized);
+        } catch {}
+      }, 80);
+    } else {
+      onMeteringUpdate?.(0);
+      if (meteringIntervalRef.current) {
+        clearInterval(meteringIntervalRef.current);
+        meteringIntervalRef.current = null;
+      }
+    }
+    return () => {
+      if (meteringIntervalRef.current) {
+        clearInterval(meteringIntervalRef.current);
+        meteringIntervalRef.current = null;
+      }
+    };
+  }, [isRecording]);
 
   const applySpeechIntentToPhoto = (photoUri: string, suggestion: SpeechIntentSuggestion | null) => {
     if (!photoUri || !suggestion) return;
@@ -343,6 +416,38 @@ const AudioRecordingModal = forwardRef((props: AudioRecordingModalProps, ref: Re
       onModalPositionChange(currentSnapIndex);
     }
   }, [currentSnapIndex, onModalStateChange, onModalPositionChange]);
+
+  // Fetch AI session summary when tray opens
+  useEffect(() => {
+    if (currentSnapIndex > 0) {
+      const requestId = ++sessionSummaryRequestId.current;
+      const photoDescriptions = entries
+        .filter(e => e.aiDescription)
+        .map(e => e.aiDescription!);
+      const voiceNotes = entries
+        .filter(e => e.type === 'text' || e.type === 'audio')
+        .map(e => e.content)
+        .filter(Boolean);
+
+      if (photoDescriptions.length === 0 && voiceNotes.length === 0) {
+        setSessionSummary(null);
+        return;
+      }
+
+      setSessionSummaryLoading(true);
+      getSessionSummary(photoDescriptions, voiceNotes).then(result => {
+        // Only apply if this is still the latest request
+        if (sessionSummaryRequestId.current === requestId) {
+          setSessionSummary(result);
+          setSessionSummaryLoading(false);
+        }
+      }).catch(() => {
+        if (sessionSummaryRequestId.current === requestId) {
+          setSessionSummaryLoading(false);
+        }
+      });
+    }
+  }, [currentSnapIndex]);
 
   // Cleanup timers on unmount
   useEffect(() => {
@@ -549,6 +654,9 @@ const AudioRecordingModal = forwardRef((props: AudioRecordingModalProps, ref: Re
     addPhoto: (photoUri: string) => {
       addImageEntry(photoUri);
     },
+    addVideo: (videoUri: string, durationMs?: number) => {
+      addVideoEntry(videoUri, durationMs);
+    },
     getTopEntryTarget: () => {
       return new Promise(resolve => {
         if (topRowRef.current && typeof (topRowRef.current as any).measureInWindow === 'function') {
@@ -599,8 +707,78 @@ const AudioRecordingModal = forwardRef((props: AudioRecordingModalProps, ref: Re
         RNAnimated.timing(revealOpacity, { toValue: 1, duration: 180, useNativeDriver: true }),
         RNAnimated.timing(revealTranslate, { toValue: 0, duration: 180, useNativeDriver: true })
       ]).start();
-    }
+    },
+    startCameraTextRecording: () => startCameraTextRecording(),
+    stopCameraTextRecording: () => stopCameraTextRecording(),
   }));
+
+  const isCameraSessionListening = isInCameraContext && isRecording && isInputFieldRecording && !currentPhoto;
+
+  useEffect(() => {
+    if (listeningShimmerLoopRef.current) {
+      listeningShimmerLoopRef.current.stop();
+      listeningShimmerLoopRef.current = null;
+    }
+
+    if (!isCameraSessionListening) {
+      listeningShimmerTranslate.setValue(-120);
+      return;
+    }
+
+    listeningShimmerTranslate.setValue(-120);
+    const shimmerLoop = RNAnimated.loop(
+      RNAnimated.sequence([
+        RNAnimated.timing(listeningShimmerTranslate, {
+          toValue: 220,
+          duration: 1600,
+          useNativeDriver: true,
+        }),
+        RNAnimated.delay(1200),
+        RNAnimated.timing(listeningShimmerTranslate, {
+          toValue: -120,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    listeningShimmerLoopRef.current = shimmerLoop;
+    shimmerLoop.start();
+
+    return () => {
+      shimmerLoop.stop();
+      listeningShimmerLoopRef.current = null;
+      listeningShimmerTranslate.setValue(-120);
+    };
+  }, [isCameraSessionListening, listeningShimmerTranslate]);
+
+  const addVideoEntry = (uri: string, durationMs: number = 0) => {
+    const entryId = Date.now().toString();
+    const newEntry: Entry = {
+      id: entryId,
+      type: 'video',
+      content: durationMs > 0 ? `Video clip (${formatClipDuration(durationMs)})` : 'Video clip',
+      uri,
+      durationMs,
+      timestamp: new Date(),
+      isAnalyzing: false,
+    };
+
+    LayoutAnimation.configureNext({
+      duration: 300,
+      create: {
+        type: LayoutAnimation.Types.spring,
+        springDamping: 0.75,
+        property: LayoutAnimation.Properties.opacity,
+      },
+      update: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+        property: LayoutAnimation.Properties.opacity,
+      },
+    });
+
+    setEntries(prev => [newEntry, ...prev]);
+  };
 
   // Add image entry with AI analysis
   const addImageEntry = async (uri: string) => {
@@ -648,37 +826,41 @@ const AudioRecordingModal = forwardRef((props: AudioRecordingModalProps, ref: Re
       });
       setEntries(prev => [newEntry, ...prev]);
       
-      // Auto-expand the speak button for this photo after a brief delay
-      setTimeout(() => {
-        LayoutAnimation.configureNext({
-          duration: 350,
-          create: {
-            type: LayoutAnimation.Types.spring,
-            springDamping: 0.75,
-            property: LayoutAnimation.Properties.scaleXY,
-          },
-          update: {
-            type: LayoutAnimation.Types.spring,
-            springDamping: 0.75,
-            property: LayoutAnimation.Properties.scaleXY,
-          },
-        });
-        setExpandedPhotoUri(uri);
-      }, 100);
-      
-      // Collapse back to mic button after 3 seconds
-      expandedPhotoTimer.current = setTimeout(() => {
-        LayoutAnimation.configureNext({
-          duration: 300,
-          update: {
-            type: LayoutAnimation.Types.spring,
-            springDamping: 0.7,
-            property: LayoutAnimation.Properties.scaleXY,
-          },
-        });
+      if (!isCameraSessionListening) {
+        // Auto-expand the speak button for this photo after a brief delay
+        setTimeout(() => {
+          LayoutAnimation.configureNext({
+            duration: 350,
+            create: {
+              type: LayoutAnimation.Types.spring,
+              springDamping: 0.75,
+              property: LayoutAnimation.Properties.scaleXY,
+            },
+            update: {
+              type: LayoutAnimation.Types.spring,
+              springDamping: 0.75,
+              property: LayoutAnimation.Properties.scaleXY,
+            },
+          });
+          setExpandedPhotoUri(uri);
+        }, 100);
+        
+        // Collapse back to mic button after 3 seconds
+        expandedPhotoTimer.current = setTimeout(() => {
+          LayoutAnimation.configureNext({
+            duration: 300,
+            update: {
+              type: LayoutAnimation.Types.spring,
+              springDamping: 0.7,
+              property: LayoutAnimation.Properties.scaleXY,
+            },
+          });
+          setExpandedPhotoUri(null);
+          expandedPhotoTimer.current = null;
+        }, 3100);
+      } else {
         setExpandedPhotoUri(null);
-        expandedPhotoTimer.current = null;
-      }, 3100);
+      }
       
       // Get AI description asynchronously
       try {
@@ -704,7 +886,7 @@ const AudioRecordingModal = forwardRef((props: AudioRecordingModalProps, ref: Re
             : entry.aiSuggestedTags;
           return {
             ...entry,
-            content: description || 'Unable to analyze image',
+            content: entry.type === 'image' ? (description || 'Unable to analyze image') : entry.content,
             aiDescription: description || undefined,
             aiDocumentIsDocument: typeof isDocument === 'boolean' ? isDocument : undefined,
             aiDocumentType: documentType,
@@ -727,7 +909,7 @@ const AudioRecordingModal = forwardRef((props: AudioRecordingModalProps, ref: Re
           entry.id === entryId 
             ? {
                 ...entry,
-                content: 'Error analyzing image',
+                content: entry.type === 'image' ? 'Error analyzing image' : entry.content,
                 aiDescription: undefined,
                 aiDocumentIsDocument: undefined,
                 aiDocumentType: undefined,
@@ -937,7 +1119,7 @@ const AudioRecordingModal = forwardRef((props: AudioRecordingModalProps, ref: Re
   // Text entry removed in fresh UI
 
   // Start recording
-  const startRecording = async (forPhotoContext: boolean = false, isGlobal: boolean = false) => {
+  const startRecording = async (forPhotoContext: boolean = false, isGlobal: boolean = false): Promise<boolean> => {
     try {
       // Ensure temporary photo stays visible while speaking
       if (temporaryPhotoTimer.current) {
@@ -948,7 +1130,7 @@ const AudioRecordingModal = forwardRef((props: AudioRecordingModalProps, ref: Re
       const permission = await AudioModule.requestRecordingPermissionsAsync();
       if (permission.status !== 'granted') {
         Alert.alert('Permission Required', 'Please grant microphone access to record audio.');
-        return;
+        return false;
       }
 
       // Set audio mode for iOS to ensure recording works properly
@@ -957,25 +1139,29 @@ const AudioRecordingModal = forwardRef((props: AudioRecordingModalProps, ref: Re
         playsInSilentMode: true,
       });
 
-      // Use HIGH_QUALITY preset which works across platforms
-      // This records in a format that's compatible with Whisper
-      await recorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
+      // Use HIGH_QUALITY preset with metering enabled for waveform visualization
+      await recorder.prepareToRecordAsync({
+        ...RecordingPresets.HIGH_QUALITY,
+        isMeteringEnabled: true,
+      });
       await recorder.record();
-      
+
       recordingStartTime.current = Date.now();
       console.log('Recording started successfully at', new Date(recordingStartTime.current).toISOString());
-      
+
       setIsRecording(true);
       setIsRecordingContext(forPhotoContext);
       setIsGlobalRecording(isGlobal);
+      return true;
     } catch (error) {
       console.error('Failed to start recording:', error);
       Alert.alert('Error', 'Failed to start recording. Please try again.');
+      return false;
     }
   };
 
   // Stop recording and transcribe
-  const stopRecording = async () => {
+  const stopRecording = async (): Promise<boolean> => {
     try {
       const photoUriBeingRecorded = recordingPhotoUri;
       setIsRecording(false);
@@ -1009,13 +1195,19 @@ const AudioRecordingModal = forwardRef((props: AudioRecordingModalProps, ref: Re
       if (actualDuration < 500) {
         Alert.alert('Recording Too Short', 'Please hold the button longer to record audio.');
         setIsProcessing(false);
+        setIsInputFieldRecording(false);
+        setIsRecordingContext(false);
+        setIsGlobalRecording(false);
         recordingStartTime.current = null;
-        return;
+        return false;
       }
       
       if (!uri) {
         Alert.alert('Error', 'Failed to get recording URI');
-        return;
+        setIsInputFieldRecording(false);
+        setIsRecordingContext(false);
+        setIsGlobalRecording(false);
+        return false;
       }
       
       // Get file info to verify the recording
@@ -1025,7 +1217,10 @@ const AudioRecordingModal = forwardRef((props: AudioRecordingModalProps, ref: Re
       if ('size' in fileInfo && fileInfo.size < 1000) {
         Alert.alert('Recording Error', 'The recording appears to be empty. Please try again and hold the button longer.');
         setIsProcessing(false);
-        return;
+        setIsInputFieldRecording(false);
+        setIsRecordingContext(false);
+        setIsGlobalRecording(false);
+        return false;
       }
       
       // Transcribe audio
@@ -1188,14 +1383,42 @@ const AudioRecordingModal = forwardRef((props: AudioRecordingModalProps, ref: Re
         }
       }
       recordingStartTime.current = null;
+      return Boolean(transcription);
     } catch (error) {
       console.error('Failed to stop recording:', error);
       Alert.alert('Error', 'Failed to process recording');
       setIsInputFieldRecording(false); // Reset input field recording state on error
       recordingStartTime.current = null;
+      return false;
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const startCameraTextRecording = async (): Promise<boolean> => {
+    if (isRecording || isProcessing) {
+      return false;
+    }
+
+    setCurrentPhoto(null);
+    setTemporaryPhoto(null);
+    setIsInputFieldRecording(true);
+    setIsRecordingContext(false);
+    setIsGlobalRecording(false);
+
+    const started = await startRecording(false, false);
+    if (!started) {
+      setIsInputFieldRecording(false);
+    }
+    return started;
+  };
+
+  const stopCameraTextRecording = async (): Promise<boolean> => {
+    if (!isRecording) {
+      return false;
+    }
+
+    return stopRecording();
   };
 
   // Toggle recording
@@ -1234,14 +1457,48 @@ const AudioRecordingModal = forwardRef((props: AudioRecordingModalProps, ref: Re
     setEditingText(currentContent);
   };
 
+  const startEditingImageNote = (entry: Entry) => {
+    setEditingEntryId(entry.id);
+    setEditingText(entry.uri ? (photoNotes[entry.uri] || entry.notes || '') : (entry.notes || ''));
+  };
+
   // Save edited text
   const saveEditedText = () => {
-    if (editingEntryId && editingText.trim()) {
-      setEntries(prev => prev.map(entry =>
-        entry.id === editingEntryId
-          ? { ...entry, content: editingText.trim() }
-          : entry
-      ));
+    if (!editingEntryId) {
+      cancelEditing();
+      return;
+    }
+
+    const trimmedText = editingText.trim();
+
+    if (trimmedText) {
+      const editedEntry = entries.find(entry => entry.id === editingEntryId);
+
+      if (editedEntry?.uri) {
+        setPhotoNotes(prev => ({
+          ...prev,
+          [editedEntry.uri!]: trimmedText,
+        }));
+      }
+
+      setEntries(prev => prev.map(entry => {
+        if (entry.id !== editingEntryId) return entry;
+
+        if (entry.type === 'image') {
+          return {
+            ...entry,
+            type: 'photoText',
+            content: trimmedText,
+            notes: trimmedText,
+          } as Entry;
+        }
+
+        return {
+          ...entry,
+          content: trimmedText,
+          notes: entry.type === 'photoText' ? trimmedText : entry.notes,
+        } as Entry;
+      }));
     }
     cancelEditing();
   };
@@ -1259,6 +1516,17 @@ const AudioRecordingModal = forwardRef((props: AudioRecordingModalProps, ref: Re
       minute: '2-digit',
       hour12: true
     });
+  };
+
+  const formatClipDuration = (durationMs?: number) => {
+    if (!durationMs || durationMs <= 0) {
+      return '0:00';
+    }
+
+    const totalSeconds = Math.max(1, Math.round(durationMs / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
   // Generate organized notes from captured entries
@@ -1368,6 +1636,12 @@ const AudioRecordingModal = forwardRef((props: AudioRecordingModalProps, ref: Re
             time: timeSec,
             ai_description: visionDescription || entry.aiDescription || entry.content || 'No description available',
             uri: entry.uri
+          });
+        } else if (entry.type === 'video') {
+          sessionEvents.push({
+            type: 'speech',
+            time: timeSec,
+            text: `Video clip recorded${entry.durationMs ? ` (${formatClipDuration(entry.durationMs)})` : ''}.`
           });
         }
       });
@@ -1516,11 +1790,15 @@ JSON (in order):\n${sessionJson}`;
       .filter(e => e.type === 'photoText')
       .map(e => ({ kind: 'photoText', time: e.timestamp.getTime(), entry: e }));
 
+    const videoRows: TimelineRow[] = entries
+      .filter(e => e.type === 'video')
+      .map(e => ({ kind: 'video', time: e.timestamp.getTime(), entry: e }));
+
     const imageRows: TimelineRow[] = entries
       .filter(e => e.type === 'image')
       .map(e => ({ kind: 'image', time: e.timestamp.getTime(), entry: e }));
 
-    const allRows: TimelineRow[] = [...textRows, ...photoTextRows, ...imageRows]
+    const allRows: TimelineRow[] = [...textRows, ...photoTextRows, ...videoRows, ...imageRows]
       .sort((a, b) => b.time - a.time);
 
     // Always call hooks unconditionally (before any early returns)
@@ -1550,6 +1828,8 @@ JSON (in order):\n${sessionJson}`;
         ? `text-${item.entry.id}`
         : item.kind === 'photoText'
           ? `photoText-${item.entry.id}`
+          : item.kind === 'video'
+            ? `video-${item.entry.id}`
           : `image-${item.entry.id}`;
 
       if (item.kind === 'photoText') {
@@ -1603,13 +1883,15 @@ JSON (in order):\n${sessionJson}`;
                           {entry.content}
                         </Text>
                       </TouchableOpacity>
-                      <TouchableOpacity 
-                        onPress={() => handleSpeakForPhoto(entry.uri!)}
-                        style={styles.photoTextMicButton}
-                        activeOpacity={0.8}
-                      >
-                        <Mic size={18} color="#64748B" />
-                      </TouchableOpacity>
+                      {!isCameraSessionListening && (
+                        <TouchableOpacity 
+                          onPress={() => handleSpeakForPhoto(entry.uri!)}
+                          style={styles.photoTextMicButton}
+                          activeOpacity={0.8}
+                        >
+                          <Mic size={18} color="#64748B" />
+                        </TouchableOpacity>
+                      )}
                     </>
                   )}
                 </View>
@@ -1659,13 +1941,58 @@ JSON (in order):\n${sessionJson}`;
               ) : (
                 <TouchableOpacity
                   style={styles.fullWidthTextTouchable}
-                  onPress={() => startEditing(entry.id, entry.content)}
+                  onPress={() => {
+                    if (!expandedTextEntries.has(entry.id)) {
+                      setExpandedTextEntries(prev => new Set(prev).add(entry.id));
+                    } else {
+                      startEditing(entry.id, entry.content);
+                    }
+                  }}
                 >
-                  <Text style={styles.fullWidthTextContent}>
+                  <Text
+                    style={styles.fullWidthTextContent}
+                    numberOfLines={expandedTextEntries.has(entry.id) ? undefined : 3}
+                  >
                     {entry.content}
                   </Text>
                 </TouchableOpacity>
               )}
+            </View>
+          </View>
+        );
+      }
+
+      if (item.kind === 'video') {
+        const entry = item.entry as Entry;
+        return (
+          <View
+            key={key}
+            ref={isFirst ? (node) => { topRowRef.current = node as any; } : undefined}
+            style={styles.photoTextContainer}
+          >
+            <View style={styles.photoTextCard}>
+              <View style={styles.photoTextLeft}>
+                <TouchableOpacity onPress={() => handleVideoTap(entry)}>
+                  <View style={styles.videoThumbnail}>
+                    <Video size={22} color="#FFFFFF" strokeWidth={2.2} />
+                    <Text style={styles.videoThumbnailLabel}>
+                      {formatClipDuration(entry.durationMs)}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.photoPlaceholderRight}>
+                <TouchableOpacity
+                  style={styles.videoPlaceholderContainer}
+                  onPress={() => handleVideoTap(entry)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.videoPlaceholderTitle}>Video clip</Text>
+                  <Text style={styles.videoPlaceholderText}>
+                    {entry.durationMs ? `${formatClipDuration(entry.durationMs)} recorded` : 'Recorded in camera'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         );
@@ -1685,15 +2012,45 @@ JSON (in order):\n${sessionJson}`;
               </TouchableOpacity>
             </View>
             <View style={styles.photoPlaceholderRight}>
-              <View style={styles.photoPlaceholderContainer}>
-                {processingPhotoUri === entry.uri ? (
+              {editingEntryId === entry.id ? (
+                <View style={[styles.photoPlaceholderContainer, styles.photoPlaceholderEditingContainer]}>
+                  <View style={styles.editContainer}>
+                    <TextInput
+                      style={styles.photoTextInput}
+                      value={editingText}
+                      onChangeText={setEditingText}
+                      multiline
+                      autoFocus
+                      placeholder="Add a note if you want..."
+                      placeholderTextColor="#94A3B8"
+                    />
+                    <View style={styles.editButtons}>
+                      <TouchableOpacity
+                        style={styles.cancelButton}
+                        onPress={cancelEditing}
+                      >
+                        <Text style={styles.cancelButtonText}>Cancel</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.saveButton}
+                        onPress={saveEditedText}
+                      >
+                        <Text style={styles.saveButtonText}>Save</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              ) : processingPhotoUri === entry.uri ? (
+                <View style={styles.photoPlaceholderContainer}>
                   <View style={styles.photoPlaceholderFooterRow}>
                     <Text style={styles.photoPlaceholderText}>Processing...</Text>
                     <View style={styles.photoListeningPillButton}>
                       <ActivityIndicator size="small" color="#FFFFFF" />
                     </View>
                   </View>
-                ) : recordingPhotoUri === entry.uri ? (
+                </View>
+              ) : recordingPhotoUri === entry.uri ? (
+                <View style={styles.photoPlaceholderContainer}>
                   <View style={styles.photoPlaceholderFooterRow}>
                     <Text style={styles.photoPlaceholderText}>Listening...</Text>
                     <TouchableOpacity 
@@ -1704,7 +2061,34 @@ JSON (in order):\n${sessionJson}`;
                       <AudioLines size={16} color="#FFFFFF" />
                     </TouchableOpacity>
                   </View>
-                ) : (
+                </View>
+              ) : isCameraSessionListening ? (
+                <TouchableOpacity
+                  style={[styles.photoPlaceholderContainer, styles.photoListeningPlaceholderContainer]}
+                  onPress={() => startEditingImageNote(entry)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.photoPlaceholderListeningText}>AI notes are listening</Text>
+                  <Text style={styles.photoPlaceholderSupportText}>
+                    ...or tap to add your own notes
+                  </Text>
+                  <RNAnimated.View
+                    pointerEvents="none"
+                    style={[
+                      styles.photoListeningShimmer,
+                      { transform: [{ translateX: listeningShimmerTranslate }] },
+                    ]}
+                  >
+                    <LinearGradient
+                      colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.28)', 'rgba(255,255,255,0)']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.photoListeningShimmerGradient}
+                    />
+                  </RNAnimated.View>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.photoPlaceholderContainer}>
                   <View style={styles.photoPlaceholderFooterRow}>
                     <Text style={styles.photoPlaceholderText}>Add notes...</Text>
                     {isFirst ? (
@@ -1740,8 +2124,8 @@ JSON (in order):\n${sessionJson}`;
                       </TouchableOpacity>
                     )}
                   </View>
-                )}
-              </View>
+                </View>
+              )}
             </View>
           </View>
           {renderPhotoMeta(entry)}
@@ -1754,21 +2138,6 @@ JSON (in order):\n${sessionJson}`;
     if (allRows.length === 0) {
       return (
         <View style={{ flex: 1 }}>
-          {/* Empty state - fades out completely as modal opens to 85% */}
-          <Animated.View style={[
-            styles.emptyState,
-            emptyStateAnimatedStyle,
-            { pointerEvents: currentSnapIndex === 0 ? 'auto' : 'none' }
-          ]}>
-            <View style={styles.emptyStateTitleContainer}>
-              <CamAIIcon size={24} glyphColor="#000000" />
-              <Text style={styles.emptyStateTitle}>Take pictures and talk</Text>
-            </View>
-            <Text style={styles.emptyStateDescription}>
-              Photos save to CompanyCam with AI notes. Can also generate proposals, work orders, punch lists, and more.
-            </Text>
-          </Animated.View>
-
           {/* Skeleton UI - fades in as modal opens to 85% */}
           <Animated.View style={[
             styles.skeletonContainerAbsolute,
@@ -2056,6 +2425,15 @@ JSON (in order):\n${sessionJson}`;
     setShowPhotoDetail(true);
   };
 
+  const handleVideoTap = (entry: Entry) => {
+    Alert.alert(
+      'Video Saved',
+      entry.durationMs
+        ? `Saved a ${formatClipDuration(entry.durationMs)} clip to this capture tray.`
+        : 'Saved this clip to the capture tray.'
+    );
+  };
+
   const handleClosePhotoDetail = () => {
     setShowPhotoDetail(false);
     setSelectedPhotoUri(null);
@@ -2099,10 +2477,13 @@ JSON (in order):\n${sessionJson}`;
         playsInSilentMode: true,
       });
 
-      // Use HIGH_QUALITY preset which works across platforms
-      await recorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
+      // Use HIGH_QUALITY preset with metering enabled
+      await recorder.prepareToRecordAsync({
+        ...RecordingPresets.HIGH_QUALITY,
+        isMeteringEnabled: true,
+      });
       await recorder.record();
-      
+
       recordingStartTime.current = Date.now();
       setPhotoDetailRecording(true);
     } catch (error) {
@@ -2215,20 +2596,28 @@ JSON (in order):\n${sessionJson}`;
       <BottomSheetView style={styles.flexContainer}>
         <View style={styles.headerContainer}>
           {isInCameraContext ? (
-            showProjectTitle ? (
-              <View style={styles.cameraHeader}>
-                <TouchableOpacity
-                  onPress={() => setShowProjectSwitcher(true)}
-                  style={styles.projectSwitcherButton}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Text style={styles.projectTitle} numberOfLines={1}>
-                    {displayProjectName}
-                  </Text>
-                  <ChevronDown size={16} color="#64748B" />
-                </TouchableOpacity>
-              </View>
-            ) : null
+            <View style={styles.cameraHeader}>
+              <TouchableOpacity
+                onPress={() => setShowProjectSwitcher(true)}
+                style={styles.projectSwitcherButton}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.projectTitle} numberOfLines={1}>
+                  {displayProjectName}
+                </Text>
+                <ChevronDown size={14} color="#94A3B8" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.sheetTabPill}
+                onPress={() => setActiveTab(activeTab === 'notes' ? 'checklists' : 'notes')}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.sheetTabPillText}>
+                  {activeTab === 'notes' ? 'Session Notes' : 'Checklists'}
+                </Text>
+                <ChevronDown size={12} color="#64748B" />
+              </TouchableOpacity>
+            </View>
           ) : (
             <View style={[styles.header, isInCameraContext && styles.headerNoDivider]}>
               <Text style={styles.title}>{title}</Text>
@@ -2252,54 +2641,60 @@ JSON (in order):\n${sessionJson}`;
           >
             <View style={styles.topSectionContainer}>
               <View style={styles.aiAssistContent}>
-                <View style={styles.aiAssistTitleContainer}>
-                  <Text style={styles.aiAssistTitle}>Create with Cam AI</Text>
-                  <CamAIIcon size={20} glyphColor="#000000" />
-                </View>
-
-                {/* Single horizontal row with AI Notes first, then other options */}
-                <ScrollView 
-                  horizontal 
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.aiAssistScrollView}
-                  contentContainerStyle={styles.aiAssistOptionsRow}
-                >
-                  {/* AI Notes - always selected, first in row */}
-                  <View style={styles.aiAssistAINotesWrapper}>
-                    <View style={styles.aiAssistAINotesSelected}>
-                      <Sparkles size={14} color="#FFFFFF" />
-                      <Text style={styles.aiAssistAINotesText}>AI Notes</Text>
-                      <CheckCircle2 size={14} color="#FFFFFF" />
-                    </View>
-                    <Text style={styles.aiAssistAlwaysOnText}>Always on</Text>
+                {sessionSummaryLoading ? (
+                  <View style={styles.aiSummaryLoading}>
+                    <ActivityIndicator size="small" color="#64748B" />
+                    <Text style={styles.aiSummaryLoadingText}>Analyzing your session...</Text>
                   </View>
+                ) : sessionSummary ? (
+                  <View style={styles.aiSummaryContainer}>
+                    <Text style={styles.aiSummaryText}>{sessionSummary.summary}</Text>
+                    {sessionSummary.suggestions.length > 0 && (
+                      <View style={styles.aiSuggestionsRow}>
+                        {sessionSummary.suggestions.map((suggestion, idx) => {
+                          const iconMap = {
+                            capture: Camera,
+                            document: FileText,
+                            checklist: CheckSquare,
+                            task: CheckCircle2,
+                          };
+                          const SuggestionIcon = iconMap[suggestion.type] || Sparkles;
+                          const briefLabel = getBriefSuggestionLabel(suggestion.label);
+                          return (
+                            <TouchableOpacity
+                              key={idx}
+                              style={styles.aiSuggestionChip}
+                              activeOpacity={0.7}
+                              onPress={() => setAiAssistantPrompt(suggestion.label)}
+                            >
+                              <SuggestionIcon size={13} color="#3B82F6" />
+                              <Text style={styles.aiSuggestionChipText} numberOfLines={1}>
+                                {briefLabel}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    )}
+                  </View>
+                ) : (
+                  <Text style={styles.aiSummaryEmptyText}>
+                    Capture photos and notes to get AI suggestions.
+                  </Text>
+                )}
 
-                  {/* Other options in the same row */}
-                  {OUTPUT_TYPE_OPTIONS.map((option) => {
-                    const isSelected = selectedOutputTypes.has(option.id);
-                    const IconComponent = option.icon;
-                    return (
-                      <TouchableOpacity
-                        key={option.id}
-                        style={[
-                          styles.aiAssistPill,
-                          isSelected && styles.aiAssistPillSelected
-                        ]}
-                        onPress={() => toggleOutputType(option.id)}
-                        activeOpacity={0.7}
-                      >
-                        <IconComponent size={14} color={isSelected ? '#FFFFFF' : '#64748B'} />
-                        <Text style={[
-                          styles.aiAssistPillText,
-                          isSelected && styles.aiAssistPillTextSelected
-                        ]}>
-                          {option.label}
-                        </Text>
-                        {isSelected && <CheckCircle2 size={12} color="#FFFFFF" />}
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
+                <View style={styles.aiPromptField}>
+                  <Sparkles size={14} color="#94A3B8" />
+                  <TextInput
+                    accessibilityLabel="Tell AI to do something"
+                    onChangeText={setAiAssistantPrompt}
+                    placeholder="Tell AI to do something..."
+                    placeholderTextColor="#94A3B8"
+                    returnKeyType="done"
+                    style={styles.aiPromptInput}
+                    value={aiAssistantPrompt}
+                  />
+                </View>
               </View>
 
               <Text style={styles.capturesHeader}>Photos & Notes</Text>
@@ -2476,26 +2871,40 @@ const styles = StyleSheet.create({
   },
 
   cameraHeader: {
-    paddingTop: 0,
-    paddingBottom: 8,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 0,
+    paddingBottom: 4,
+    paddingHorizontal: 16,
   },
   projectSwitcherButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
+    gap: 4,
     paddingVertical: 6,
     borderRadius: 16,
     backgroundColor: 'transparent',
   },
   projectTitle: {
     fontFamily: 'Inter-SemiBold',
-    fontSize: 16,
+    fontSize: 15,
+    color: '#1E293B',
+    maxWidth: screenWidth * 0.4,
+  },
+  sheetTabPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: '#F1F5F9',
+  },
+  sheetTabPillText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 13,
     color: '#64748B',
-    maxWidth: screenWidth * 0.7,
-    textAlign: 'center',
   },
 
   currentPhotoContainer: {
@@ -2910,35 +3319,29 @@ const styles = StyleSheet.create({
   emptyState: {
     flex: 1,
     justifyContent: 'flex-start',
-    alignItems: 'center',
+    alignItems: 'stretch',
     paddingTop: 8,
-    paddingBottom: 40,
+    paddingHorizontal: 16,
   },
-  emptyStateTitleContainer: {
-    flexDirection: 'row',
+  emptyStateMessage: {
+    alignSelf: 'center',
     alignItems: 'center',
-    paddingHorizontal: 32,
-    gap: 8,
-    marginBottom: 4,
+    maxWidth: 280,
+    paddingTop: 16,
   },
-  emptyStateLogo: {
-    width: 28,
-    height: 28,
-  },
-  emptyStateTitle: {
+  emptyStateHeadline: {
     fontFamily: 'Inter-SemiBold',
-    fontSize: 22,
-    color: '#1E293B',
+    fontSize: 16,
+    color: '#475569',
     textAlign: 'center',
   },
-  emptyStateDescription: {
+  emptyStateBody: {
     fontFamily: 'Inter-Regular',
-    fontSize: 14,
-    color: '#64748B',
+    fontSize: 13,
+    color: '#94A3B8',
     textAlign: 'center',
-    marginBottom: 10,
-    paddingHorizontal: 32,
-    lineHeight: 20,
+    lineHeight: 18,
+    marginTop: 6,
   },
   emptyText: {
     fontFamily: 'Inter-Regular',
@@ -3323,6 +3726,20 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: '#E2E8F0',
   },
+  videoThumbnail: {
+    width: 78,
+    height: 78,
+    borderRadius: 10,
+    backgroundColor: '#0F172A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  videoThumbnailLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
+    color: '#FFFFFF',
+  },
   photoTextContentContainer: {
     flex: 1,
     marginRight: 0,
@@ -3370,9 +3787,36 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     height: 78,
   },
+  photoPlaceholderEditingContainer: {
+    height: 'auto',
+    minHeight: 110,
+    justifyContent: 'flex-start',
+    paddingVertical: 12,
+  },
+  videoPlaceholderContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    height: 78,
+  },
   photoPlaceholderRight: {
     flex: 1,
     justifyContent: 'center',
+  },
+  videoPlaceholderTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+    color: '#1E293B',
+    marginBottom: 4,
+  },
+  videoPlaceholderText: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 13,
+    color: '#64748B',
+    lineHeight: 18,
   },
   photoPlaceholderText: {
     fontFamily: 'Inter-Regular',
@@ -3388,7 +3832,30 @@ const styles = StyleSheet.create({
   photoPlaceholderListeningText: {
     fontFamily: 'Inter-SemiBold',
     fontSize: 14,
-    color: '#1E293B',
+    color: '#64748B',
+  },
+  photoListeningPlaceholderContainer: {
+    paddingVertical: 12,
+    justifyContent: 'center',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  photoPlaceholderSupportText: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#94A3B8',
+    marginTop: 4,
+  },
+  photoListeningShimmer: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: -120,
+    width: 96,
+    opacity: 0.7,
+  },
+  photoListeningShimmerGradient: {
     flex: 1,
   },
   photoButtonContainer: {
@@ -3821,7 +4288,7 @@ const styles = StyleSheet.create({
   // Parallax Tabs
   tabsContainer: {
     flexDirection: 'column',
-    paddingHorizontal: 12,
+    paddingHorizontal: 0,
     paddingBottom: 12,
     backgroundColor: 'white',
   },
@@ -3911,13 +4378,78 @@ const styles = StyleSheet.create({
   aiAssistTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 16,
+    gap: 6,
+    marginBottom: 10,
   },
   aiAssistTitle: {
     fontFamily: 'Inter-Bold',
     fontSize: 20,
     color: '#1E293B',
+  },
+  aiSummaryLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
+  },
+  aiSummaryLoadingText: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 13,
+    color: '#94A3B8',
+  },
+  aiSummaryContainer: {
+    gap: 10,
+  },
+  aiSummaryText: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 14,
+    color: '#475569',
+    lineHeight: 20,
+  },
+  aiSummaryEmptyText: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 13,
+    color: '#94A3B8',
+  },
+  aiSuggestionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  aiSuggestionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 6,
+    paddingHorizontal: 11,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  aiSuggestionChipText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 11,
+    color: '#3B82F6',
+  },
+  aiPromptField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  aiPromptInput: {
+    flex: 1,
+    fontFamily: 'Inter-Regular',
+    fontSize: 14,
+    color: '#1E293B',
+    paddingVertical: 0,
   },
   aiAssistOptions: {
     flexDirection: 'row',

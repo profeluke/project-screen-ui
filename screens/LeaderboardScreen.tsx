@@ -40,7 +40,7 @@ interface ProData {
 const LOCAL_AREA = {
   city: 'Lincoln',
   state: 'NE',
-  tagline: 'Find great contractors who use CompanyCam in Lincoln, Nebraska.',
+  tagline: 'Work with great contractors who use CompanyCam in Lincoln, Nebraska.',
 };
 
 // Fake data for local pros with project images
